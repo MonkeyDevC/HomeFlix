@@ -1,0 +1,124 @@
+import { notFound } from "next/navigation";
+import type {
+  AdminContentMediaSummaryDto,
+  AdminProfileOptionDto
+} from "../../../../../lib/family/admin-contracts";
+import { AdminPageHeader } from "../../../../../components/admin/admin-page-header";
+import { AdminSectionCard } from "../../../../../components/admin/admin-section-card";
+import type { ContentItemFormInitial } from "../../../../../components/admin/content-item-form";
+import { ContentItemForm } from "../../../../../components/admin/content-item-form";
+import { IntegratedMediaSection } from "../../../../../components/admin/integrated-media-section";
+import { ProfileAccessEditor } from "../../../../../components/admin/profile-access-editor";
+import { StatusBadge, VisibilityBadge } from "../../../../../components/admin/status-badges";
+import { mapMediaAssetToDto } from "../../../../../lib/server/admin/media-asset-mapper";
+import { getFamilyPrisma } from "../../../../../lib/server/db";
+
+export default async function AdminContentEditPage({
+  params
+}: Readonly<{ params: Promise<{ id: string }> }>) {
+  const { id } = await params;
+  const prisma = getFamilyPrisma();
+
+  const item = await prisma.contentItem.findUnique({ where: { id } });
+  if (item === null) {
+    notFound();
+  }
+
+  const [categories, collections, profiles, links, grants, videoAsset] = await Promise.all([
+    prisma.category.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.collection.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.profile.findMany({
+      orderBy: { displayName: "asc" },
+      select: { id: true, displayName: true, userId: true }
+    }),
+    prisma.contentItemCollectionLink.findMany({
+      where: { contentItemId: id },
+      orderBy: { position: "asc" },
+      select: { collectionId: true, position: true }
+    }),
+    prisma.profileContentAccess.findMany({
+      where: { contentItemId: id },
+      select: { profileId: true }
+    }),
+    prisma.mediaAsset.findFirst({ where: { contentItemId: id }, orderBy: { updatedAt: "desc" } })
+  ]);
+
+  const initial: ContentItemFormInitial = {
+    categoryId: item.categoryId ?? "",
+    editorialStatus: item.editorialStatus,
+    posterPath: item.posterPath ?? "",
+    slug: item.slug,
+    synopsis: item.synopsis ?? "",
+    thumbnailPath: item.thumbnailPath ?? "",
+    title: item.title,
+    type: item.type,
+    visibility: item.visibility,
+    releaseYear: item.releaseYear === null ? "" : String(item.releaseYear),
+    maturityRating: item.maturityRating ?? "",
+    seasonNumber: item.seasonNumber === null ? "" : String(item.seasonNumber),
+    episodeNumber: item.episodeNumber === null ? "" : String(item.episodeNumber)
+  };
+
+  const initialCollectionIds = links.map((l) => l.collectionId);
+
+  const profileOptions: AdminProfileOptionDto[] = profiles.map((p) => ({
+    displayName: p.displayName,
+    id: p.id,
+    userId: p.userId
+  }));
+
+  const initialProfileIds = grants.map((g) => g.profileId);
+
+  const initialMedia: AdminContentMediaSummaryDto = {
+    contentItemId: item.id,
+    posterPath: item.posterPath,
+    thumbnailPath: item.thumbnailPath,
+    videoAsset: videoAsset === null ? null : mapMediaAssetToDto(videoAsset)
+  };
+
+  return (
+    <div>
+      <AdminPageHeader
+        description={`Slug interno · ${item.slug}`}
+        title={item.title}
+        actions={
+          <div className="hf-admin-page-head-badges">
+            <StatusBadge status={item.editorialStatus} />
+            <VisibilityBadge visibility={item.visibility} />
+          </div>
+        }
+      />
+
+      <div className="hf-admin-col-stack">
+        <AdminSectionCard
+          eyebrow="Ficha editorial"
+          title="Datos del contenido"
+          description="Título, sinopsis y dónde aparece en el storefront."
+        >
+          <ContentItemForm
+            categories={categories}
+            collections={collections}
+            contentId={item.id}
+            initial={initial}
+            initialCollectionIds={initialCollectionIds}
+            mode="edit"
+          />
+        </AdminSectionCard>
+
+        <IntegratedMediaSection contentItemId={item.id} initial={initialMedia} />
+
+        <AdminSectionCard
+          eyebrow="Acceso por perfil"
+          title="Perfiles con acceso"
+          description="Sin perfiles marcados, el contenido publicado no aparece en el catálogo de ningún perfil."
+        >
+          <ProfileAccessEditor
+            contentItemId={item.id}
+            initialProfileIds={initialProfileIds}
+            profiles={profileOptions}
+          />
+        </AdminSectionCard>
+      </div>
+    </div>
+  );
+}

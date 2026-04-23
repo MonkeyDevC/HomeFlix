@@ -1,0 +1,119 @@
+# syntax=docker/dockerfile:1.7
+#
+# HomeFlix Family V1 — imagen de producción del monolito Next.js (apps/client).
+#
+# Decisiones clave:
+#   - Base Debian slim (glibc) para evitar la incompatibilidad conocida de
+#     `ffmpeg-static` / `ffprobe-static` con musl (Alpine).
+#   - Dos etapas: builder (compila workspace + Next.js) y runner (solo lo
+#     necesario para `next start`).
+#   - Prisma 7 necesita OpenSSL presente en runtime (no viene en debian-slim por
+#     defecto): lo instalamos en ambas etapas.
+#   - `ffmpeg-static` trae sus binarios glibc-linux-x64/arm64 y sirven en
+#     Debian; además instalamos el paquete `ffmpeg` del sistema como fallback
+#     (costo bajo y mayor robustez si el static falla en alguna arquitectura).
+#   - Usuario `homeflix` (uid/gid 1001) no-root para el runtime.
+#   - `tini` como PID 1 para propagar señales a `next start` y dejar que los
+#     streams (`ffmpeg`, uploads largas) cierren limpiamente al reiniciar.
+#   - El entrypoint ejecuta `prisma migrate deploy` antes de `next start`
+#     (idempotente; si no hay migraciones pendientes es un no-op).
+
+ARG NODE_IMAGE=node:22-bookworm-slim
+
+############################
+# Stage 1 — builder
+############################
+FROM ${NODE_IMAGE} AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PNPM_HOME=/pnpm \
+    PATH=/pnpm:$PATH \
+    NEXT_TELEMETRY_DISABLED=1 \
+    NODE_ENV=production
+
+WORKDIR /repo
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates \
+      openssl \
+      python3 \
+      make \
+      g++ \
+ && rm -rf /var/lib/apt/lists/* \
+ && corepack enable \
+ && corepack prepare pnpm@10.33.0 --activate
+
+# Primero el lockfile y manifiestos para cachear `pnpm install`.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages ./packages
+COPY apps/client ./apps/client
+
+# `NODE_ENV=production` durante la instalación no omite devDependencies cuando
+# pnpm usa lockfile; lo dejamos explícito para que no se quede pillado.
+RUN pnpm install --frozen-lockfile --prefer-offline
+
+# Builds dependientes: primero packages de workspace (contracts/domain), luego Next.
+RUN pnpm --filter @homeflix/contracts build \
+ && pnpm --filter @homeflix/domain build \
+ && pnpm --filter @homeflix/client build
+
+
+############################
+# Stage 2 — runner
+############################
+FROM ${NODE_IMAGE} AS runner
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PNPM_HOME=/pnpm \
+    PATH=/pnpm:$PATH \
+    NEXT_TELEMETRY_DISABLED=1 \
+    NODE_ENV=production \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0 \
+    FAMILY_STORAGE_ROOT=public/storage
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates \
+      openssl \
+      tini \
+      ffmpeg \
+      wget \
+ && rm -rf /var/lib/apt/lists/* \
+ && corepack enable \
+ && corepack prepare pnpm@10.33.0 --activate \
+ && groupadd --system --gid 1001 homeflix \
+ && useradd --system --uid 1001 --gid homeflix --home-dir /repo --shell /usr/sbin/nologin homeflix
+
+WORKDIR /repo
+
+# Copiamos el workspace ya compilado desde el builder. Mantener `node_modules`
+# permite que `prisma migrate deploy` y `next start` encuentren binarios y
+# módulos sin reinstalar.
+COPY --from=builder --chown=homeflix:homeflix /repo /repo
+
+# Garantiza que los buckets de media existan y sean propiedad del usuario de
+# runtime, tanto si usamos named volume como si se monta un bind host.
+RUN mkdir -p /repo/apps/client/public/storage/videos \
+             /repo/apps/client/public/storage/posters \
+             /repo/apps/client/public/storage/thumbnails \
+ && chown -R homeflix:homeflix /repo/apps/client/public/storage
+
+COPY --chown=homeflix:homeflix docker/client-entrypoint.sh /usr/local/bin/homeflix-entrypoint
+# Si el repo se clonó en Windows, asegúrate de que el script tiene LF antes del chmod.
+RUN sed -i 's/\r$//' /usr/local/bin/homeflix-entrypoint \
+ && chmod +x /usr/local/bin/homeflix-entrypoint
+
+USER homeflix
+
+EXPOSE 3000
+
+# Healthcheck contra el endpoint anónimo /api/family/healthz.
+# Usamos wget (ya instalado) para no depender de curl.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
+  CMD wget -q -O /dev/null --tries=1 --timeout=4 \
+      "http://127.0.0.1:${PORT}/api/family/healthz" || exit 1
+
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/homeflix-entrypoint"]
+CMD ["pnpm", "--filter", "@homeflix/client", "start"]

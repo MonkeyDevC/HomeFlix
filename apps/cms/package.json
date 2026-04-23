@@ -1,0 +1,12 @@
+{
+  "name": "@homeflix/cms",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node ../../scripts/check-dev-infra.mjs",
+    "db": "docker compose --project-directory ../.. -f ../../docker-compose.dev.yml up postgres",
+    "dev": "docker compose --project-directory ../.. -f ../../docker-compose.dev.yml up directus",
+    "down": "docker compose --project-directory ../.. -f ../../docker-compose.dev.yml down"
+  }
+}

@@ -1,0 +1,18 @@
+# syntax=docker/dockerfile:1
+# API HomeFlix: build y runtime en una sola etapa (evita roturas por symlinks pnpm entre stages).
+FROM node:22-alpine
+WORKDIR /repo
+ENV NODE_ENV=production
+RUN corepack enable
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages ./packages
+COPY apps/api ./apps/api
+RUN pnpm install --frozen-lockfile \
+  && pnpm --filter @homeflix/config build \
+  && pnpm --filter @homeflix/types build \
+  && pnpm --filter @homeflix/domain build \
+  && pnpm --filter @homeflix/contracts build \
+  && pnpm --filter @homeflix/api build
+WORKDIR /repo/apps/api
+EXPOSE 4000
+CMD ["node", "dist/server.js"]

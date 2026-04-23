@@ -1,0 +1,192 @@
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  engineType      = "client"
+  moduleFormat    = "esm"
+  runtime         = "nodejs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model MediaAsset {
+  id                      String    @id @default(uuid()) @db.Uuid
+  provider                String    @default("mux")
+  providerAssetId         String?   @map("provider_asset_id")
+  providerUploadId        String?   @unique @map("provider_upload_id")
+  providerPlaybackId      String?   @map("provider_playback_id")
+  playbackId              String?   @map("playback_id")
+  /// Optional hint stored when the upload was requested from the Phase 2 pipeline.
+  /// It is NOT the authoritative catalog binding; use ContentItemMediaAssetLink for that.
+  legacyPipelineContentItemId String? @map("content_item_id")
+  status                  String    @default("draft")
+  playbackPolicy          String    @default("public") @map("playback_policy")
+  sourceFilename          String?   @map("source_filename")
+  mimeType                String?   @map("mime_type")
+  durationSeconds         Float?    @map("duration_seconds")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+  readyAt                 DateTime? @map("ready_at")
+  failedAt                DateTime? @map("failed_at")
+  failureReason           String?   @map("failure_reason")
+  lastWebhookEventId      String?   @map("last_webhook_event_id")
+  rawWebhookLastEventType String?   @map("raw_webhook_last_event_type")
+  rawWebhookLastEventAt   DateTime? @map("raw_webhook_last_event_at")
+  contentItemLinks        ContentItemMediaAssetLink[]
+  watchHistoryEntries     WatchHistory[]
+
+  @@index([legacyPipelineContentItemId])
+  @@index([providerAssetId])
+  @@index([status])
+  @@index([lastWebhookEventId])
+  @@map("media_assets")
+}
+
+model MediaAssetWebhookEvent {
+  id              String    @id @default(uuid()) @db.Uuid
+  provider        String    @default("mux")
+  providerEventId String    @unique @map("provider_event_id")
+  eventType       String    @map("event_type")
+  mediaAssetId    String?   @map("media_asset_id") @db.Uuid
+  applied         Boolean   @default(false)
+  transition      String?
+  reason          String?
+  receivedAt      DateTime  @default(now()) @map("received_at")
+  processedAt     DateTime? @map("processed_at")
+
+  @@index([mediaAssetId])
+  @@index([eventType])
+  @@map("media_asset_webhook_events")
+}
+
+model Category {
+  id          String        @id @default(uuid()) @db.Uuid
+  slug        String        @unique
+  name        String
+  description String?
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  contentItems ContentItem[] @relation("PrimaryCategory")
+
+  @@map("categories")
+}
+
+model Collection {
+  id          String                      @id @default(uuid()) @db.Uuid
+  slug        String                      @unique
+  name        String
+  description String?
+  createdAt   DateTime                    @default(now()) @map("created_at")
+  updatedAt   DateTime                    @updatedAt @map("updated_at")
+  primaryContentItems ContentItem[]        @relation("PrimaryCollection")
+  contentItemLinks ContentItemCollectionLink[]
+
+  @@map("collections")
+}
+
+model ContentItem {
+  id                  String                       @id @default(uuid()) @db.Uuid
+  slug                String                       @unique
+  title               String
+  synopsis            String?
+  type                String                       @default("movie")
+  editorialStatus     String                       @default("draft") @map("editorial_status")
+  visibility          String                       @default("private")
+  /// Denormalized pointer to the MediaAsset linked with role=primary. Must stay in sync with ContentItemMediaAssetLink.
+  primaryMediaAssetId String?                      @map("primary_media_asset_id") @db.Uuid
+  primaryCategoryId   String?                      @map("primary_category_id") @db.Uuid
+  primaryCollectionId String?                      @map("primary_collection_id") @db.Uuid
+  createdAt           DateTime                     @default(now()) @map("created_at")
+  updatedAt           DateTime                     @updatedAt @map("updated_at")
+  publishedAt         DateTime?                    @map("published_at")
+  primaryCategory     Category?                    @relation("PrimaryCategory", fields: [primaryCategoryId], references: [id], onDelete: SetNull)
+  primaryCollection   Collection?                  @relation("PrimaryCollection", fields: [primaryCollectionId], references: [id], onDelete: SetNull)
+  collectionLinks     ContentItemCollectionLink[]
+  mediaAssetLinks     ContentItemMediaAssetLink[]
+  watchHistoryEntries WatchHistory[]
+
+  @@index([editorialStatus])
+  @@index([primaryCategoryId])
+  @@index([primaryCollectionId])
+  @@index([primaryMediaAssetId])
+  @@index([type])
+  @@map("content_items")
+}
+
+model ContentItemCollectionLink {
+  id            String      @id @default(uuid()) @db.Uuid
+  contentItemId String      @map("content_item_id") @db.Uuid
+  collectionId  String      @map("collection_id") @db.Uuid
+  position      Int?
+  createdAt     DateTime    @default(now()) @map("created_at")
+  contentItem   ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  collection    Collection  @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@unique([contentItemId, collectionId])
+  @@index([collectionId, position])
+  @@map("content_item_collection_links")
+}
+
+model ContentItemMediaAssetLink {
+  id            String      @id @default(uuid()) @db.Uuid
+  contentItemId String      @map("content_item_id") @db.Uuid
+  mediaAssetId  String      @map("media_asset_id") @db.Uuid
+  role          String      @default("primary")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  contentItem   ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  mediaAsset    MediaAsset  @relation(fields: [mediaAssetId], references: [id], onDelete: Cascade)
+
+  @@unique([contentItemId, mediaAssetId, role])
+  @@index([contentItemId, role])
+  @@index([mediaAssetId])
+  @@map("content_item_media_asset_links")
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  role         String
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  profiles     Profile[]
+
+  @@map("users")
+}
+
+model Profile {
+  id                  String         @id @default(uuid()) @db.Uuid
+  displayName         String         @map("display_name")
+  avatarKey           String?        @map("avatar_key")
+  familySafe          Boolean        @default(false) @map("family_safe")
+  userId              String?        @map("user_id") @db.Uuid
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+  user                User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  watchHistoryEntries WatchHistory[]
+
+  @@index([userId])
+  @@map("profiles")
+}
+
+model WatchHistory {
+  id              String      @id @default(uuid()) @db.Uuid
+  profileId       String      @map("profile_id") @db.Uuid
+  contentItemId   String      @map("content_item_id") @db.Uuid
+  mediaAssetId    String?     @map("media_asset_id") @db.Uuid
+  progressSeconds Float       @default(0) @map("progress_seconds")
+  completedAt     DateTime?   @map("completed_at")
+  lastWatchedAt   DateTime    @default(now()) @map("last_watched_at")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+  profile         Profile     @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  contentItem     ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  mediaAsset      MediaAsset? @relation(fields: [mediaAssetId], references: [id], onDelete: SetNull)
+
+  @@unique([profileId, contentItemId])
+  @@index([profileId, lastWatchedAt])
+  @@index([contentItemId])
+  @@index([mediaAssetId])
+  @@map("watch_history")
+}

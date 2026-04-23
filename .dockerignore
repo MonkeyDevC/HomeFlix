@@ -1,0 +1,70 @@
+# HomeFlix Family V1 — contexto de build para Docker.
+#
+# Objetivos:
+#   - NO copiar apps legacy (V2: api + cms + Mux + Directus).
+#   - NO copiar secretos (.env*).
+#   - NO copiar media subida localmente (se persiste con volumen, no con build).
+#   - NO copiar artefactos de build intermedios del host.
+
+# ----- VCS / IDE / SO -----
+.git
+.gitignore
+.gitattributes
+.github
+.cursor
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# ----- Node / Next / TS artefactos del host -----
+**/node_modules
+**/.next
+**/.turbo
+**/dist
+**/build
+**/coverage
+**/*.tsbuildinfo
+**/.cache
+.tmp
+.pnpm-store
+
+# ----- Secretos y envs: jamás dentro de la imagen -----
+.env
+.env.*
+!.env.production.example
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# ----- Apps legacy V2 (no forman parte del monolito Family V1) -----
+apps/api
+apps/cms
+
+# ----- Documentación y scripts que no hacen falta en runtime -----
+docs
+*.md
+!README.md
+scripts/dev-stack.mjs
+scripts/check-dev-infra.mjs
+scripts/compose-config.mjs
+scripts/directus-editorial-verify.mjs
+scripts/phase-2-transition-fixture.mjs
+scripts/phase-3-catalog-fixture.mjs
+scripts/smoke-operations.mjs
+
+# ----- Terminales / logs locales -----
+terminals
+*.log
+pnpm-debug.log*
+
+# ----- Media subida: SIEMPRE por volumen, nunca por build -----
+apps/client/public/storage
+
+# ----- Prisma client generado (se regenera en build) -----
+apps/client/src/generated
+apps/api/src/generated
+
+# ----- Otros -----
+docker-compose.dev.yml

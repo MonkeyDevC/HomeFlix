@@ -1,0 +1,48 @@
+{
+  "name": "homeflix",
+  "version": "0.0.0",
+  "private": true,
+  "description": "HomeFlix Phase 8: operación, Docker reproducible, health/readiness, logs y runbooks.",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "corepack pnpm -r --sort build",
+    "check": "corepack pnpm build && corepack pnpm typecheck",
+    "db:generate": "corepack pnpm --filter @homeflix/api db:generate",
+    "db:migrate": "corepack pnpm --filter @homeflix/api db:migrate",
+    "db:deploy": "corepack pnpm --filter @homeflix/api exec prisma migrate deploy",
+    "db:push": "corepack pnpm --filter @homeflix/api db:push",
+    "db:family:generate": "corepack pnpm --filter @homeflix/client exec prisma generate",
+    "db:family:migrate": "corepack pnpm --filter @homeflix/client exec prisma migrate dev",
+    "db:family:deploy": "corepack pnpm --filter @homeflix/client exec prisma migrate deploy",
+    "dev:apps": "corepack pnpm --parallel --filter @homeflix/api --filter @homeflix/client dev",
+    "dev:stack": "node scripts/dev-stack.mjs",
+    "dev:api": "corepack pnpm --filter @homeflix/api dev",
+    "dev:cms": "docker compose -f docker-compose.dev.yml up directus",
+    "dev:client": "corepack pnpm --filter @homeflix/client dev",
+    "dev:db": "docker compose -f docker-compose.dev.yml up postgres",
+    "dev:infra": "docker compose -f docker-compose.dev.yml up postgres directus",
+    "infra:check": "node scripts/check-dev-infra.mjs",
+    "infra:down": "docker compose -f docker-compose.dev.yml down",
+    "phase2:fixture": "node scripts/phase-2-transition-fixture.mjs",
+    "phase3:fixture": "node scripts/phase-3-catalog-fixture.mjs",
+    "cms:verify": "node scripts/directus-editorial-verify.mjs",
+    "ops:compose-config": "node scripts/compose-config.mjs",
+    "ops:smoke": "node scripts/smoke-operations.mjs",
+    "stack:up": "docker compose -f docker-compose.dev.yml --profile apps up --build",
+    "stack:up:infra": "docker compose -f docker-compose.dev.yml up postgres directus",
+    "typecheck": "corepack pnpm -r --sort typecheck"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/engines",
+      "esbuild",
+      "ffmpeg-static",
+      "ffprobe-static",
+      "prisma",
+      "sharp"
+    ]
+  }
+}

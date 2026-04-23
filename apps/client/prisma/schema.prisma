@@ -1,0 +1,202 @@
+// HomeFlix Family V1 — esquema PostgreSQL `family_v1`.
+// SSOT: docs/family-v1/03-DOMAIN_CONTRACTS.md · FASE 2 dominio simplificado.
+
+generator client {
+  provider   = "prisma-client"
+  output     = "../src/generated/prisma-family"
+  engineType = "library"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["family_v1"]
+}
+
+/// Cuenta que inicia sesión. Roles: `admin` | `family_viewer`.
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  role         String    @default("family_viewer")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  profiles     Profile[]
+
+  @@schema("family_v1")
+  @@map("users")
+}
+
+/// Identidad de consumo; gobierna qué catálogo ve el perfil (vía `ProfileContentAccess`).
+model Profile {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  displayName String   @map("display_name")
+  avatarKey   String?  @map("avatar_key")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessGrants   ProfileContentAccess[]
+  watchHistory   WatchHistory[]
+  watchlistItems ProfileWatchlistItem[]
+
+  @@index([userId])
+  @@schema("family_v1")
+  @@map("profiles")
+}
+
+model Category {
+  id           String        @id @default(uuid()) @db.Uuid
+  slug         String        @unique
+  name         String
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  contentItems ContentItem[]
+
+  @@schema("family_v1")
+  @@map("categories")
+}
+
+model Collection {
+  id               String                      @id @default(uuid()) @db.Uuid
+  slug             String                      @unique
+  name             String
+  description      String?
+  createdAt        DateTime                    @default(now()) @map("created_at")
+  updatedAt        DateTime                    @updatedAt @map("updated_at")
+  contentItemLinks ContentItemCollectionLink[]
+
+  @@schema("family_v1")
+  @@map("collections")
+}
+
+/// Pieza editorial. Visible en catálogo solo si `editorialStatus = published` **y** existe fila en `ProfileContentAccess`.
+model ContentItem {
+  id               String   @id @default(uuid()) @db.Uuid
+  slug             String   @unique
+  title            String
+  synopsis         String?
+  /// draft | published | archived
+  editorialStatus  String   @default("draft") @map("editorial_status")
+  /// private | household | public_internal
+  visibility       String   @default("private")
+  /// movie | clip | episode
+  type             String   @default("movie")
+  thumbnailPath    String?  @map("thumbnail_path")
+  posterPath       String?  @map("poster_path")
+  categoryId       String?  @map("category_id") @db.Uuid
+  /// Año de estreno (ej. 2024). Decorativo/editorial.
+  releaseYear      Int?     @map("release_year")
+  /// Clasificación por edad: "G" | "7+" | "13+" | "18+". Texto libre corto.
+  maturityRating   String?  @map("maturity_rating")
+  /// Solo relevante si type = "episode".
+  seasonNumber     Int?     @map("season_number")
+  episodeNumber    Int?     @map("episode_number")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  category        Category?                   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  collectionLinks ContentItemCollectionLink[]
+  mediaAssets     MediaAsset[]
+  accessGrants    ProfileContentAccess[]
+  watchHistory    WatchHistory[]
+  watchlistItems  ProfileWatchlistItem[]
+
+  @@index([editorialStatus])
+  @@index([categoryId])
+  @@schema("family_v1")
+  @@map("content_items")
+}
+
+/// Archivo local asociado a un ítem (sin proveedor externo ni IDs de pipeline Mux).
+model MediaAsset {
+  id              String    @id @default(uuid()) @db.Uuid
+  contentItemId   String?   @map("content_item_id") @db.Uuid
+  filePath        String    @map("file_path")
+  mimeType        String?   @map("mime_type")
+  durationSeconds Float?    @map("duration_seconds")
+  sizeBytes       BigInt?   @map("size_bytes")
+  width           Int?      @map("width")
+  height          Int?      @map("height")
+  frameRate       Float?    @map("frame_rate")
+  codec           String?   @map("codec")
+  /// pending | ready | archived
+  status          String    @default("pending")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  contentItem ContentItem? @relation(fields: [contentItemId], references: [id], onDelete: SetNull)
+
+  @@index([contentItemId])
+  @@schema("family_v1")
+  @@map("media_assets")
+}
+
+model ContentItemCollectionLink {
+  id            String   @id @default(uuid()) @db.Uuid
+  contentItemId String   @map("content_item_id") @db.Uuid
+  collectionId  String   @map("collection_id") @db.Uuid
+  position      Int      @default(0)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  contentItem ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  collection  Collection  @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@unique([contentItemId, collectionId])
+  @@index([collectionId, position])
+  @@schema("family_v1")
+  @@map("content_item_collection_links")
+}
+
+/// Regla explícita: sin fila (profileId, contentItemId) el ítem **no** entra al catálogo del perfil.
+model ProfileContentAccess {
+  id            String   @id @default(uuid()) @db.Uuid
+  profileId     String   @map("profile_id") @db.Uuid
+  contentItemId String   @map("content_item_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  profile     Profile     @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  contentItem ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, contentItemId])
+  @@index([contentItemId])
+  @@index([profileId])
+  @@schema("family_v1")
+  @@map("profile_content_access")
+}
+
+model WatchHistory {
+  id              String    @id @default(uuid()) @db.Uuid
+  profileId       String    @map("profile_id") @db.Uuid
+  contentItemId   String    @map("content_item_id") @db.Uuid
+  progressSeconds Float     @default(0) @map("progress_seconds")
+  durationSeconds Float?    @map("duration_seconds")
+  completedAt     DateTime? @map("completed_at")
+  lastWatchedAt   DateTime  @default(now()) @map("last_watched_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  profile     Profile     @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  contentItem ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, contentItemId])
+  @@schema("family_v1")
+  @@map("watch_history")
+}
+
+/// Lista personal del perfil ("Mi lista"). Cada perfil puede guardar ContentItems visibles para verlos luego.
+model ProfileWatchlistItem {
+  id            String   @id @default(uuid()) @db.Uuid
+  profileId     String   @map("profile_id") @db.Uuid
+  contentItemId String   @map("content_item_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  profile     Profile     @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  contentItem ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, contentItemId])
+  @@index([profileId])
+  @@index([contentItemId])
+  @@schema("family_v1")
+  @@map("profile_watchlist_items")
+}

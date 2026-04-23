@@ -1,0 +1,110 @@
+name: homeflix-prod
+
+# --------------------------------------------------------------------------- #
+# HomeFlix Family V1 — compose de producción (VPS Ubuntu).
+#
+# Contiene SOLO los servicios realmente necesarios para Family V1:
+#   - postgres : base de datos (no se expone al host)
+#   - client   : monolito Next.js (apps/client) con Prisma + migrate deploy
+#   - nginx    : reverse proxy público (TLS se añade más adelante)
+#
+# Explícitamente NO incluye Directus ni la API Fastify legada (V2).
+# Usar `docker compose -f docker-compose.prod.yml ...` (NO combinar con el
+# docker-compose.dev.yml).
+# --------------------------------------------------------------------------- #
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: homeflix-prod-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:?POSTGRES_DB requerido}"
+      POSTGRES_USER: "${POSTGRES_USER:?POSTGRES_USER requerido}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD requerido}"
+    volumes:
+      - homeflix-postgres-data:/var/lib/postgresql/data
+    # En producción Postgres NO se expone al host: solo el cliente dentro de la
+    # red interna de Docker lo alcanza por el nombre del servicio.
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - homeflix-internal
+
+  client:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.client.prod
+    image: homeflix/client:prod
+    container_name: homeflix-prod-client
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: "production"
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+      # Prisma + app
+      DATABASE_URL: "${DATABASE_URL:?DATABASE_URL requerido}"
+      FAMILY_JWT_SECRET: "${FAMILY_JWT_SECRET:?FAMILY_JWT_SECRET requerido (min 32 chars)}"
+      FAMILY_STORAGE_ROOT: "${FAMILY_STORAGE_ROOT:-public/storage}"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+    volumes:
+      # Persistencia de media (videos, posters, thumbnails). Montamos el volumen
+      # exactamente en la ruta que usa FAMILY_STORAGE_ROOT relativa al WORKDIR
+      # del contenedor; así los posters/thumbnails siguen sirviéndose como
+      # estáticos de Next.js (bajo /public) y el streaming /api/family/media
+      # encuentra los videos sin tocar código.
+      - homeflix-media:/repo/apps/client/public/storage
+    expose:
+      - "3000"
+    networks:
+      - homeflix-internal
+    # El HEALTHCHECK vive en el Dockerfile (golpea /api/family/healthz); con eso
+    # `depends_on: { condition: service_healthy }` de nginx funciona correctamente.
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: homeflix-prod-nginx
+    restart: unless-stopped
+    depends_on:
+      client:
+        condition: service_healthy
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
+      # Carpetas listas para certbot / certificados TLS (vacías por defecto).
+      - homeflix-nginx-certs:/etc/letsencrypt
+      - homeflix-nginx-webroot:/var/www/certbot
+    networks:
+      - homeflix-internal
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "--tries=1", "--timeout=3", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  homeflix-internal:
+    driver: bridge
+
+volumes:
+  homeflix-postgres-data:
+    name: homeflix-postgres-data
+  homeflix-media:
+    name: homeflix-media
+  homeflix-nginx-certs:
+    name: homeflix-nginx-certs
+  homeflix-nginx-webroot:
+    name: homeflix-nginx-webroot
