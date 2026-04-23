@@ -21,7 +21,7 @@ export default function NoProfilesPage() {
   return (
     <FamilySectionLayout>
       <FamilyPageHeader
-        description="Tu usuario no tiene perfiles de consumo. Crea al menos uno en la base (seed o admin futuro)."
+        description="Tu usuario no tiene perfiles de consumo. Un administrador puede darte de alta con perfiles iniciales en Admin → Usuarios, o puedes usar el seed Prisma del client."
         title="Sin perfiles"
       />
       <p style={{ color: "var(--hf-muted, #94a3b8)", fontSize: "0.9rem", lineHeight: 1.5, margin: 0 }}>

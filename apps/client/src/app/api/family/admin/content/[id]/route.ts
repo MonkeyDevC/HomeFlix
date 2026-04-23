@@ -4,6 +4,7 @@ import type { AdminContentItemDetailDto } from "../../../../../../lib/family/adm
 import {
   assertContentType,
   assertEditorialStatus,
+  assertReleaseScope,
   assertValidSlug,
   assertVisibility,
   optionalMaturityRating,
@@ -21,6 +22,7 @@ function mapDetail(c: {
   title: string;
   synopsis: string | null;
   editorialStatus: string;
+  releaseScope: string;
   visibility: string;
   type: string;
   thumbnailPath: string | null;
@@ -39,6 +41,7 @@ function mapDetail(c: {
     title: c.title,
     synopsis: c.synopsis,
     editorialStatus: c.editorialStatus,
+    releaseScope: c.releaseScope,
     visibility: c.visibility,
     type: c.type,
     thumbnailPath: c.thumbnailPath,
@@ -137,6 +140,18 @@ export async function PATCH(
       return NextResponse.json({ error: "validation", message: err }, { status: 400 });
     }
     data.editorialStatus = e;
+  }
+
+  if ((body as { releaseScope?: unknown }).releaseScope !== undefined) {
+    const r = (body as { releaseScope: unknown }).releaseScope;
+    if (typeof r !== "string") {
+      return NextResponse.json({ error: "validation", message: "releaseScope inválido." }, { status: 400 });
+    }
+    const err = assertReleaseScope(r.trim());
+    if (err !== null) {
+      return NextResponse.json({ error: "validation", message: err }, { status: 400 });
+    }
+    data.releaseScope = r.trim();
   }
 
   if ((body as { visibility?: unknown }).visibility !== undefined) {

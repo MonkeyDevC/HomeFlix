@@ -1226,6 +1226,53 @@
   box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.45);
 }
 
+.hf-admin-release-scope-cards {
+  display: grid;
+  gap: var(--hf-space-3);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 720px) {
+  .hf-admin-release-scope-cards {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.hf-admin-release-scope-card {
+  text-align: left;
+  border-radius: var(--hf-radius-md);
+  border: 1px solid var(--hf-admin-border);
+  background: rgba(15, 23, 42, 0.45);
+  color: var(--hf-admin-fg, #e2e8f0);
+  padding: var(--hf-space-3) var(--hf-space-4);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.hf-admin-release-scope-card:hover {
+  border-color: rgba(148, 163, 184, 0.45);
+}
+
+.hf-admin-release-scope-card.is-active {
+  border-color: rgba(59, 130, 246, 0.55);
+  background: rgba(30, 58, 138, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.25);
+}
+
+.hf-admin-release-scope-card-title {
+  display: block;
+  font-weight: 650;
+  font-size: 0.95rem;
+  margin-bottom: 0.35rem;
+}
+
+.hf-admin-release-scope-card-desc {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--hf-admin-muted, #94a3b8);
+  line-height: 1.4;
+}
+
 /* ========================================================= */
 /* Slug preview                                               */
 /* ========================================================= */
@@ -1674,10 +1721,25 @@
 
 .hf-admin-access-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--hf-space-3);
   padding: var(--hf-space-3) 0;
   border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.hf-admin-access-row__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hf-admin-access-row__account {
+  color: var(--hf-admin-fg-soft);
+  font-size: 0.8rem;
+  line-height: 1.35;
+  word-break: break-all;
 }
 
 .hf-admin-access-row:last-child {
@@ -2702,6 +2764,30 @@
   background: var(--hf-admin-accent);
   border-color: var(--hf-admin-accent);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+}
+
+.hf-admin-check-option--stack {
+  align-items: flex-start;
+}
+
+.hf-admin-check-option__label-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hf-admin-check-option__title {
+  color: #f8fafc;
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+.hf-admin-check-option__sub {
+  font-size: 0.78rem;
+  color: var(--hf-admin-fg-soft);
+  line-height: 1.35;
+  word-break: break-all;
 }
 
 /* Reduced motion for wizard */

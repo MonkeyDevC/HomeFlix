@@ -13,8 +13,9 @@
  * helper server-side directamente.
  */
 import type { Prisma } from "../../../generated/prisma-family/client";
-import type { ContentTypeFamily } from "../../family/domain-shapes";
+import type { ContentTypeFamily, UserRoleFamily } from "../../family/domain-shapes";
 import { getFamilyPrisma } from "../db";
+import { prismaWhereStorefrontVisibleContent } from "./content-storefront-visibility";
 
 export type SeriesEpisodeDto = Readonly<{
   id: string;
@@ -75,6 +76,23 @@ const linkSelect = {
 
 type LinkRaw = Prisma.ContentItemCollectionLinkGetPayload<{ select: typeof linkSelect }>;
 
+function sortSeriesEpisodesAsc(
+  episodes: readonly SeriesEpisodeDto[]
+): readonly SeriesEpisodeDto[] {
+  return [...episodes].sort((a, b) => {
+    const seasonA = a.seasonNumber ?? Number.POSITIVE_INFINITY;
+    const seasonB = b.seasonNumber ?? Number.POSITIVE_INFINITY;
+    if (seasonA !== seasonB) return seasonA - seasonB;
+
+    const epA = a.episodeNumber ?? Number.POSITIVE_INFINITY;
+    const epB = b.episodeNumber ?? Number.POSITIVE_INFINITY;
+    if (epA !== epB) return epA - epB;
+
+    if (a.position !== b.position) return a.position - b.position;
+    return a.title.localeCompare(b.title);
+  });
+}
+
 function pickRepresentative(links: readonly LinkRaw[]): LinkRaw | null {
   if (links.length === 0) return null;
   // Menor (seasonNumber, episodeNumber); fallback al primero por position.
@@ -99,9 +117,11 @@ function pickRepresentative(links: readonly LinkRaw[]): LinkRaw | null {
 
 export async function getSeriesDetailForActiveProfile(
   collectionSlug: string,
-  profileId: string
+  profileId: string,
+  viewerRole: UserRoleFamily
 ): Promise<SeriesDetailDto | null> {
   const prisma = getFamilyPrisma();
+  const visibleWhere = prismaWhereStorefrontVisibleContent(profileId, viewerRole);
 
   const collection = await prisma.collection.findUnique({
     where: { slug: collectionSlug },
@@ -120,8 +140,7 @@ export async function getSeriesDetailForActiveProfile(
     where: {
       collectionId: collection.id,
       contentItem: {
-        editorialStatus: "published",
-        accessGrants: { some: { profileId } }
+        AND: [visibleWhere]
       }
     },
     orderBy: [{ position: "asc" }],
@@ -151,7 +170,7 @@ export async function getSeriesDetailForActiveProfile(
 
   let total = 0;
   let haveAnyDuration = false;
-  const episodes: SeriesEpisodeDto[] = links.map((link) => {
+  const episodesUnsorted: SeriesEpisodeDto[] = links.map((link) => {
     const item = link.contentItem;
     const asset = item.mediaAssets[0] ?? null;
     if (asset !== null && asset.durationSeconds !== null) {
@@ -174,6 +193,8 @@ export async function getSeriesDetailForActiveProfile(
       hasMedia: asset !== null
     };
   });
+
+  const episodes = sortSeriesEpisodesAsc(episodesUnsorted);
 
   return {
     collection,

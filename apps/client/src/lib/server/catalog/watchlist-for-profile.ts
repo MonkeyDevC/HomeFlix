@@ -1,5 +1,7 @@
+import type { UserRoleFamily } from "../../family/domain-shapes";
 import type { FamilyHomeCardDto } from "../../family/storefront-contracts";
 import { getFamilyPrisma } from "../db";
+import { prismaWhereStorefrontVisibleContent } from "./content-storefront-visibility";
 import { groupSeriesForCatalog, type CatalogItemRaw } from "./group-series-for-catalog";
 
 const watchlistCardSelect = {
@@ -110,14 +112,19 @@ export type WatchlistKey = Readonly<{
 
 async function resolveSeriesRepresentativeContentId(
   profileId: string,
-  collectionId: string
+  collectionId: string,
+  viewerRole: UserRoleFamily
 ): Promise<string | null> {
   const prisma = getFamilyPrisma();
+  const visibleWhere = prismaWhereStorefrontVisibleContent(profileId, viewerRole);
   const episode = await prisma.contentItem.findFirst({
     where: {
-      editorialStatus: "published",
-      accessGrants: { some: { profileId } },
-      collectionLinks: { some: { collectionId } }
+      AND: [
+        visibleWhere,
+        {
+          collectionLinks: { some: { collectionId } }
+        }
+      ]
     },
     orderBy: [
       { seasonNumber: "asc" },
@@ -132,25 +139,26 @@ async function resolveSeriesRepresentativeContentId(
 /** Devuelve el id de ContentItem que debemos guardar para un card del storefront. */
 export async function resolveWatchlistContentItemId(
   profileId: string,
-  card: Readonly<{ kind: "series" | "standalone"; id: string }>
+  card: Readonly<{ kind: "series" | "standalone"; id: string }>,
+  viewerRole: UserRoleFamily
 ): Promise<string | null> {
   if (card.kind === "standalone") {
     return card.id;
   }
-  return resolveSeriesRepresentativeContentId(profileId, card.id);
+  return resolveSeriesRepresentativeContentId(profileId, card.id, viewerRole);
 }
 
 /** Agrega (si no existe) un ContentItem a la lista personal del perfil. */
 export async function addToWatchlist(
   profileId: string,
-  contentItemId: string
+  contentItemId: string,
+  viewerRole: UserRoleFamily
 ): Promise<{ ok: true } | { ok: false; error: "not_visible" }> {
   const prisma = getFamilyPrisma();
   const visible = await prisma.contentItem.findFirst({
     where: {
       id: contentItemId,
-      editorialStatus: "published",
-      accessGrants: { some: { profileId } }
+      AND: [prismaWhereStorefrontVisibleContent(profileId, viewerRole)]
     },
     select: { id: true }
   });
@@ -197,15 +205,16 @@ export async function getWatchlistContentIdSetForProfile(
  * (el usuario puede limpiarlo luego desde la UI al reintentarlo).
  */
 export async function listWatchlistCardsForProfile(
-  profileId: string
+  profileId: string,
+  viewerRole: UserRoleFamily
 ): Promise<readonly FamilyHomeCardDto[]> {
   const prisma = getFamilyPrisma();
+  const visibleWhere = prismaWhereStorefrontVisibleContent(profileId, viewerRole);
   const rows = await prisma.profileWatchlistItem.findMany({
     where: {
       profileId,
       contentItem: {
-        editorialStatus: "published",
-        accessGrants: { some: { profileId } }
+        AND: [visibleWhere]
       }
     },
     orderBy: { createdAt: "desc" },

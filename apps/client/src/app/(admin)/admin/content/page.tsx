@@ -6,7 +6,7 @@ import { AdminInfoHint } from "../../../../components/admin/admin-info-hint";
 import { IconPencil } from "../../../../components/admin/admin-nav-icons";
 import { AdminPageHeader } from "../../../../components/admin/admin-page-header";
 import { AdminTable, AdminTd, AdminTh } from "../../../../components/admin/admin-table";
-import { StatusBadge, VisibilityBadge } from "../../../../components/admin/status-badges";
+import { ReleaseScopeBadge, StatusBadge, VisibilityBadge } from "../../../../components/admin/status-badges";
 import { getFamilyPrisma } from "../../../../lib/server/db";
 
 function kindLabel(type: string): string {
@@ -22,6 +22,7 @@ export default async function AdminContentListPage() {
     slug: string;
     title: string;
     editorialStatus: string;
+    releaseScope: string;
     visibility: string;
     type: string;
     accessCount: number;
@@ -39,6 +40,7 @@ export default async function AdminContentListPage() {
         slug: true,
         title: true,
         editorialStatus: true,
+        releaseScope: true,
         visibility: true,
         type: true,
         _count: { select: { accessGrants: true } }
@@ -47,6 +49,7 @@ export default async function AdminContentListPage() {
     rows = raw.map((r) => ({
       accessCount: r._count.accessGrants,
       editorialStatus: r.editorialStatus,
+      releaseScope: r.releaseScope,
       id: r.id,
       slug: r.slug,
       title: r.title,
@@ -75,7 +78,8 @@ export default async function AdminContentListPage() {
       />
 
       <AdminInfoHint>
-        Crea películas sueltas o episodios dentro de una serie. Solo los publicados aparecen en el catálogo, y siempre limitados a los perfiles con acceso.
+        Crea películas sueltas o episodios dentro de una serie. El catálogo familiar solo muestra piezas publicadas,
+        con alcance &quot;Catálogo familiar&quot; y perfiles autorizados; la vista previa admin omite a los espectadores.
       </AdminInfoHint>
 
       {dbError !== null ? (
@@ -92,7 +96,7 @@ export default async function AdminContentListPage() {
               <AdminTh>Título</AdminTh>
               <AdminTh>Tipo</AdminTh>
               <AdminTh>Estado</AdminTh>
-              <AdminTh>Alcance</AdminTh>
+              <AdminTh>Catálogo</AdminTh>
               <AdminTh>Perfiles</AdminTh>
               <AdminTh style={{ width: "220px" }}>Acciones</AdminTh>
             </tr>
@@ -111,7 +115,10 @@ export default async function AdminContentListPage() {
                   <StatusBadge status={r.editorialStatus} />
                 </AdminTd>
                 <AdminTd>
-                  <VisibilityBadge visibility={r.visibility} />
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                    <ReleaseScopeBadge releaseScope={r.releaseScope} />
+                    <VisibilityBadge visibility={r.visibility} />
+                  </div>
                 </AdminTd>
                 <AdminTd>{r.accessCount}</AdminTd>
                 <AdminTd>

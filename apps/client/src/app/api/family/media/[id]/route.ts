@@ -3,6 +3,7 @@ import { stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { NextResponse } from "next/server";
 import { requireStorefrontApi } from "../../../../../lib/server/auth/require-storefront-api";
+import { prismaWhereStorefrontVisibleContent } from "../../../../../lib/server/catalog/content-storefront-visibility";
 import { getFamilyPrisma } from "../../../../../lib/server/db";
 import { notFoundResponse, serviceUnavailableResponse } from "../../../../../lib/server/http/family-api-errors";
 import { resolveStorageDiskPath } from "../../../../../lib/server/storage/family-storage";
@@ -27,8 +28,7 @@ export async function GET(
         id,
         status: "ready",
         contentItem: {
-          editorialStatus: "published",
-          accessGrants: { some: { profileId: active.profileId } }
+          AND: [prismaWhereStorefrontVisibleContent(active.profileId, active.viewerRole)]
         }
       },
       select: {

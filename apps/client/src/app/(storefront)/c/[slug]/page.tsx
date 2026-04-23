@@ -14,15 +14,15 @@ export default async function ContentDetailPage({
 }>) {
   const { slug } = await params;
   const active = await requireStorefrontAccess(`/c/${slug}`);
-  const detail = await getContentDetailForActiveProfile(slug, active.profileId);
+  const detail = await getContentDetailForActiveProfile(slug, active.profileId, active.viewerRole);
 
   if (detail === null) {
     notFound();
   }
 
   const [watch, related] = await Promise.all([
-    getWatchProgressForProfileContent(active.profileId, detail.item.id),
-    getRelatedForContentDetail(detail.item, active.profileId)
+    getWatchProgressForProfileContent(active.profileId, detail.item.id, active.viewerRole),
+    getRelatedForContentDetail(detail.item, active.profileId, active.viewerRole)
   ]);
 
   return (

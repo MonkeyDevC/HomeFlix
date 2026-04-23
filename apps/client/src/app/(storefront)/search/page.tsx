@@ -16,7 +16,7 @@ export default async function SearchPage({
   const active = await requireStorefrontAccess(`/search?q=${encodeURIComponent(query)}`);
 
   try {
-    const result = await searchFamilyCatalogForProfile(active.profileId, query);
+    const result = await searchFamilyCatalogForProfile(active, query);
     return <FamilySearchView profileName={active.displayName} result={result} />;
   } catch (error) {
     return (

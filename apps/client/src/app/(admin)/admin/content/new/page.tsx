@@ -25,15 +25,27 @@ export default async function AdminContentNewPage({
     prisma.collection.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.profile.findMany({
       orderBy: { displayName: "asc" },
-      select: { id: true, displayName: true, userId: true }
+      select: {
+        id: true,
+        displayName: true,
+        userId: true,
+        user: { select: { email: true } }
+      }
     })
   ]);
+
+  const profileRows = profiles.map((p) => ({
+    id: p.id,
+    displayName: p.displayName,
+    userId: p.userId,
+    userEmail: p.user.email
+  }));
 
   return (
     <ContentCreateWizard
       categories={categories}
       collections={collections}
-      profiles={profiles}
+      profiles={profileRows}
       preset={preset}
     />
   );

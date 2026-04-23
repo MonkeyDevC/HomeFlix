@@ -13,6 +13,7 @@ import { getDatabaseUrlOrThrow } from "./env";
  * undefined (reading 'findMany')" tras un hot-reload sin reinicio del server.
  */
 const REQUIRED_PRISMA_DELEGATES = [
+  "user",
   "profile",
   "contentItem",
   "mediaAsset",

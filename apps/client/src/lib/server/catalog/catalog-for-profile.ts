@@ -1,9 +1,8 @@
 import type { Prisma } from "../../../generated/prisma-family/client";
+import type { UserRoleFamily } from "../../family/domain-shapes";
+import type { ContentItemCatalogRowFamily } from "../../family/domain-shapes";
 import { getFamilyPrisma } from "../db";
-import {
-  EDITORIAL_STATUS_PUBLISHED,
-  type ContentItemCatalogRowFamily
-} from "../../family/domain-shapes";
+import { prismaWhereStorefrontVisibleContent } from "./content-storefront-visibility";
 
 const catalogSelect = {
   id: true,
@@ -36,17 +35,17 @@ function toCatalogRow(row: CatalogRowRaw): ContentItemCatalogRowFamily {
 }
 
 /**
- * Catálogo visible para un perfil: **publicado** y con fila en `ProfileContentAccess`.
- * Sin fila de acceso → no aparece (no hay fallback “ver todo”).
+ * Catálogo visible para un perfil: reglas centralizadas en `prismaWhereStorefrontVisibleContent`
+ * (estado editorial + `releaseScope` + `ProfileContentAccess`).
  */
 export async function listPublishedCatalogForProfile(
-  profileId: string
+  profileId: string,
+  viewerRole: UserRoleFamily
 ): Promise<readonly ContentItemCatalogRowFamily[]> {
   const prisma = getFamilyPrisma();
   const rows = await prisma.contentItem.findMany({
     where: {
-      editorialStatus: EDITORIAL_STATUS_PUBLISHED,
-      accessGrants: { some: { profileId } }
+      AND: [prismaWhereStorefrontVisibleContent(profileId, viewerRole)]
     },
     orderBy: { updatedAt: "desc" },
     select: catalogSelect

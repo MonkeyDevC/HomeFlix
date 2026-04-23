@@ -49,6 +49,8 @@ model Category {
   id           String        @id @default(uuid()) @db.Uuid
   slug         String        @unique
   name         String
+  /// admin_only (carrusel interno) | public_catalog (visible en home familiar).
+  releaseScope String        @default("public_catalog") @map("release_scope")
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
   contentItems ContentItem[]
@@ -78,6 +80,8 @@ model ContentItem {
   synopsis         String?
   /// draft | published | archived
   editorialStatus  String   @default("draft") @map("editorial_status")
+  /// admin_only (vista previa QA) | public_catalog (catálogo familiar cuando además está publicado y con acceso por perfil).
+  releaseScope     String   @default("public_catalog") @map("release_scope")
   /// private | household | public_internal
   visibility       String   @default("private")
   /// movie | clip | episode

@@ -13,6 +13,7 @@ import { adminParseJson } from "../../lib/family/admin-json";
 import { AdminInfoHint } from "./admin-info-hint";
 import { ContentKindSelector } from "./content-kind-selector";
 import { ContentPlacementSelector } from "./content-placement-selector";
+import { ReleaseScopeSection } from "./release-scope-section";
 import { SlugPreviewField } from "./slug-preview-field";
 
 export type ContentItemFormInitial = Readonly<{
@@ -20,6 +21,7 @@ export type ContentItemFormInitial = Readonly<{
   title: string;
   synopsis: string;
   editorialStatus: string;
+  releaseScope: string;
   visibility: string;
   type: string;
   thumbnailPath: string;
@@ -78,6 +80,9 @@ export function ContentItemForm({
   const [synopsis, setSynopsis] = useState(initial?.synopsis ?? "");
   const [type, setType] = useState(startingType);
   const [editorialStatus, setEditorialStatus] = useState(initial?.editorialStatus ?? "draft");
+  const [releaseScope, setReleaseScope] = useState<"admin_only" | "public_catalog">(
+    initial?.releaseScope === "admin_only" ? "admin_only" : "public_catalog"
+  );
   const [visibility, setVisibility] = useState(initial?.visibility ?? "household");
   const [categoryId, setCategoryId] = useState(initial?.categoryId ?? "");
   const [selectedCollectionIds, setSelectedCollectionIds] = useState<readonly string[]>(startingCollections);
@@ -114,6 +119,7 @@ export function ContentItemForm({
       title,
       synopsis: synopsis.trim() === "" ? null : synopsis,
       editorialStatus,
+      releaseScope,
       visibility,
       type,
       categoryId: categoryId.trim() === "" ? null : categoryId,
@@ -347,13 +353,16 @@ export function ContentItemForm({
           ))}
         </div>
         <p className="hf-admin-field-hint">
-          Solo los publicados aparecen en el catálogo, y siempre filtrados por los perfiles con acceso.
+          El estado editorial describe el ciclo de vida del contenido; el alcance define si ya va al catálogo
+          familiar o sigue en vista previa interna.
         </p>
       </div>
 
+      <ReleaseScopeSection onChange={setReleaseScope} value={releaseScope} />
+
       <div className="hf-admin-field">
-        <span className="hf-admin-field-label">Alcance</span>
-        <div className="hf-admin-segment" role="group" aria-label="Visibilidad">
+        <span className="hf-admin-field-label">Visibilidad</span>
+        <div className="hf-admin-segment" role="group" aria-label="Visibilidad editorial">
           {VISIBILITY_OPTIONS.map((opt) => (
             <button
               key={opt.value}

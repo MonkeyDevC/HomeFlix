@@ -5,6 +5,7 @@ import { buildAdminSlugCandidate, ensureUniqueAdminSlug } from "../../../../../l
 import {
   assertContentType,
   assertEditorialStatus,
+  assertReleaseScope,
   assertValidSlug,
   assertVisibility,
   optionalMaturityRating,
@@ -21,6 +22,7 @@ function mapListItem(c: {
   slug: string;
   title: string;
   editorialStatus: string;
+  releaseScope: string;
   visibility: string;
   type: string;
   categoryId: string | null;
@@ -32,6 +34,7 @@ function mapListItem(c: {
     slug: c.slug,
     title: c.title,
     editorialStatus: c.editorialStatus,
+    releaseScope: c.releaseScope,
     visibility: c.visibility,
     type: c.type,
     categoryId: c.categoryId,
@@ -173,6 +176,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "validation", message: episodeOk.error }, { status: 400 });
   }
 
+  const releaseScopeRaw =
+    typeof (body as { releaseScope?: unknown }).releaseScope === "string"
+      ? (body as { releaseScope: string }).releaseScope.trim()
+      : "public_catalog";
+  const rsErr = assertReleaseScope(releaseScopeRaw);
+  if (rsErr !== null) {
+    return NextResponse.json({ error: "validation", message: rsErr }, { status: 400 });
+  }
+
   try {
     const prisma = getFamilyPrisma();
 
@@ -196,6 +208,7 @@ export async function POST(request: Request) {
       title: titleOk.value,
       synopsis: synopsisOk.value,
       editorialStatus: editorialRaw,
+      releaseScope: releaseScopeRaw,
       visibility,
       type,
       thumbnailPath: thumbOk.value,

@@ -40,6 +40,57 @@ export function assertContentType(v: string): string | null {
   return null;
 }
 
+const ADMIN_EMAIL_MAX = 254;
+
+export function parseAdminEmail(
+  raw: unknown
+): { ok: true; email: string } | { ok: false; error: string } {
+  if (typeof raw !== "string") {
+    return { ok: false, error: "Correo obligatorio." };
+  }
+  const t = raw.trim().toLowerCase();
+  if (t.length < 3 || t.length > ADMIN_EMAIL_MAX || !t.includes("@")) {
+    return { ok: false, error: "Correo inválido." };
+  }
+  return { ok: true, email: t };
+}
+
+export function parseAdminUserRole(
+  raw: unknown,
+  fallback: "admin" | "family_viewer"
+): { ok: true; role: "admin" | "family_viewer" } | { ok: false; error: string } {
+  if (raw === undefined || raw === null || raw === "") {
+    return { ok: true, role: fallback };
+  }
+  if (typeof raw !== "string") {
+    return { ok: false, error: "Rol inválido." };
+  }
+  const r = raw.trim();
+  if (r === "admin" || r === "family_viewer") {
+    return { ok: true, role: r };
+  }
+  return { ok: false, error: "Rol debe ser admin o family_viewer." };
+}
+
+export function parseAdminPassword(
+  raw: unknown,
+  required: boolean
+): { ok: true; password: string | null } | { ok: false; error: string } {
+  if (raw === undefined || raw === null) {
+    return required ? { ok: false, error: "Contraseña obligatoria." } : { ok: true, password: null };
+  }
+  if (typeof raw !== "string") {
+    return { ok: false, error: "Contraseña inválida." };
+  }
+  if (raw === "") {
+    return required ? { ok: false, error: "Contraseña obligatoria." } : { ok: true, password: null };
+  }
+  if (raw.length < 8 || raw.length > 200) {
+    return { ok: false, error: "La contraseña debe tener entre 8 y 200 caracteres." };
+  }
+  return { ok: true, password: raw };
+}
+
 export function optionalTrimmedString(
   v: unknown,
   maxLen: number
@@ -55,6 +106,15 @@ export function optionalTrimmedString(
     return { ok: false, error: `Texto demasiado largo (máx. ${maxLen}).` };
   }
   return { ok: true, value: t.length === 0 ? null : t };
+}
+
+const RELEASE_SCOPES = new Set(["admin_only", "public_catalog"]);
+
+export function assertReleaseScope(v: string): string | null {
+  if (!RELEASE_SCOPES.has(v)) {
+    return "Alcance inválido: usa vista previa solo administradores o catálogo familiar.";
+  }
+  return null;
 }
 
 const MATURITY = new Set(["G", "7+", "13+", "18+"]);

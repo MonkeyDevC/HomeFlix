@@ -4,8 +4,10 @@ import type {
   FamilyHomeRowDto,
   FamilySearchResultDto
 } from "../../family/storefront-contracts";
-import type { ActiveProfileSummary } from "../auth/active-profile";
+import type { StorefrontCatalogActor } from "../auth/storefront-catalog-actor";
 import { getFamilyPrisma } from "../db";
+import { prismaWhereStorefrontVisibleCategory } from "./category-storefront-visibility";
+import { prismaWhereStorefrontVisibleContent } from "./content-storefront-visibility";
 import {
   groupSeriesForCatalog,
   type CatalogItemRaw
@@ -90,11 +92,14 @@ function toRaw(row: ContentCardRaw): CatalogItemRaw {
 }
 
 export async function getFamilyHomeForProfile(
-  activeProfile: ActiveProfileSummary
+  actor: StorefrontCatalogActor
 ): Promise<FamilyHomeDto> {
   const prisma = getFamilyPrisma();
+  const visibleWhere = prismaWhereStorefrontVisibleContent(actor.profileId, actor.viewerRole);
+  const categoryWhere = prismaWhereStorefrontVisibleCategory(actor.viewerRole);
 
   const categories = await prisma.category.findMany({
+    ...(Object.keys(categoryWhere).length > 0 ? { where: categoryWhere } : {}),
     orderBy: { name: "asc" },
     select: {
       id: true,
@@ -102,8 +107,7 @@ export async function getFamilyHomeForProfile(
       name: true,
       contentItems: {
         where: {
-          editorialStatus: "published",
-          accessGrants: { some: { profileId: activeProfile.profileId } }
+          AND: [visibleWhere]
         },
         orderBy: [
           // Series primero ordenan por season/episode para que el representante sea determinista.
@@ -117,22 +121,24 @@ export async function getFamilyHomeForProfile(
     }
   });
 
-  const rows: FamilyHomeRowDto[] = categories.map((category) => ({
-    categoryId: category.id,
-    categorySlug: category.slug,
-    categoryName: category.name,
-    items: groupSeriesForCatalog(category.contentItems.map(toRaw))
-  }));
+  const rows: FamilyHomeRowDto[] = categories
+    .map((category) => ({
+      categoryId: category.id,
+      categorySlug: category.slug,
+      categoryName: category.name,
+      items: groupSeriesForCatalog(category.contentItems.map(toRaw))
+    }))
+    .filter((row) => row.items.length > 0);
 
   const [myList, watchlistIdSet] = await Promise.all([
-    listWatchlistCardsForProfile(activeProfile.profileId),
-    getWatchlistContentIdSetForProfile(activeProfile.profileId)
+    listWatchlistCardsForProfile(actor.profileId, actor.viewerRole),
+    getWatchlistContentIdSetForProfile(actor.profileId)
   ]);
 
   return {
     profile: {
-      id: activeProfile.profileId,
-      displayName: activeProfile.displayName
+      id: actor.profileId,
+      displayName: actor.displayName
     },
     rows,
     myList,
@@ -141,17 +147,18 @@ export async function getFamilyHomeForProfile(
 }
 
 export async function searchFamilyCatalogForProfile(
-  profileId: string,
+  actor: StorefrontCatalogActor,
   query: string
 ): Promise<FamilySearchResultDto> {
   const clean = query.trim();
   const prisma = getFamilyPrisma();
+  const profileId = actor.profileId;
+  const visibleWhere = prismaWhereStorefrontVisibleContent(profileId, actor.viewerRole);
 
   if (clean.length === 0) {
     const suggested = await prisma.contentItem.findMany({
       where: {
-        editorialStatus: "published",
-        accessGrants: { some: { profileId } }
+        AND: [visibleWhere]
       },
       orderBy: [
         { seasonNumber: "asc" },
@@ -174,9 +181,10 @@ export async function searchFamilyCatalogForProfile(
   // agrupada aunque los episodios no matchen literalmente.
   const rows = await prisma.contentItem.findMany({
     where: {
-      editorialStatus: "published",
-      accessGrants: { some: { profileId } },
-      OR: [
+      AND: [
+        visibleWhere,
+        {
+          OR: [
         { title: { contains: clean, mode: "insensitive" } },
         { slug: { contains: clean, mode: "insensitive" } },
         { synopsis: { contains: clean, mode: "insensitive" } },
@@ -192,6 +200,8 @@ export async function searchFamilyCatalogForProfile(
               }
             }
           }
+        }
+          ]
         }
       ]
     },

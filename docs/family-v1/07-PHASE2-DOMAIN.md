@@ -15,8 +15,8 @@
 
 ## Consulta canónica de catálogo
 
-- `listPublishedCatalogForProfile(profileId)` en `apps/client/src/lib/server/catalog/catalog-for-profile.ts`.
-- Condición: `editorialStatus === "published"` **y** `accessGrants.some({ profileId })`.
+- `listPublishedCatalogForProfile(profileId, viewerRole)` en `apps/client/src/lib/server/catalog/catalog-for-profile.ts`.
+- Regla central: `prismaWhereStorefrontVisibleContent` en `content-storefront-visibility.ts` (publicación + `release_scope` + `accessGrants`).
 
 ## Escenarios de producto (DB)
 

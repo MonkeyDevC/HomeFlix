@@ -7,6 +7,7 @@ import { useState } from "react";
 import type { AdminCategoryDto } from "../../lib/family/admin-contracts";
 import { adminParseJson } from "../../lib/family/admin-json";
 import { AdminInfoHint } from "./admin-info-hint";
+import { CategoryReleaseScopeSection } from "./category-release-scope-section";
 import { SlugPreviewField } from "./slug-preview-field";
 
 export function CategoryForm({
@@ -16,10 +17,13 @@ export function CategoryForm({
 }: Readonly<{
   mode: "create" | "edit";
   categoryId?: string;
-  initial?: Readonly<{ slug: string; name: string }>;
+  initial?: Readonly<{ slug: string; name: string; releaseScope?: string }>;
 }>) {
   const router = useRouter();
   const [name, setName] = useState(initial?.name ?? "");
+  const [releaseScope, setReleaseScope] = useState<"admin_only" | "public_catalog">(
+    initial?.releaseScope === "admin_only" ? "admin_only" : "public_catalog"
+  );
   const [slugOverride, setSlugOverride] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -35,7 +39,7 @@ export function CategoryForm({
       mode === "create" ? "/api/family/admin/categories" : `/api/family/admin/categories/${categoryId ?? ""}`;
     const method = mode === "create" ? "POST" : "PATCH";
 
-    const payload: Record<string, string> = { name };
+    const payload: Record<string, string> = { name, releaseScope };
     if (slugOverride.trim() !== "") {
       payload.slug = slugOverride.trim();
     }
@@ -64,7 +68,8 @@ export function CategoryForm({
   return (
     <form className="hf-admin-form" onSubmit={(ev) => void onSubmit(ev)}>
       <AdminInfoHint>
-        Las categorías se muestran como carruseles en el home del storefront. Usa un nombre familiar y claro; el resto se genera solo.
+        Las categorías se muestran como carruseles en el home. Puedes dejarlas en vista previa interna o
+        liberarlas al catálogo familiar cuando estén listas.
       </AdminInfoHint>
 
       {error !== null ? <p className="hf-admin-form-msg hf-admin-form-msg--error" role="alert">{error}</p> : null}
@@ -83,8 +88,10 @@ export function CategoryForm({
           placeholder="Ej. Para toda la familia"
           autoComplete="off"
         />
-        <p className="hf-admin-field-hint">Así lo verán los perfiles en el home.</p>
+        <p className="hf-admin-field-hint">Así lo verán los perfiles en el home (si el carrusel es público).</p>
       </div>
+
+      <CategoryReleaseScopeSection onChange={setReleaseScope} value={releaseScope} />
 
       <SlugPreviewField
         currentSlug={initial?.slug ?? ""}

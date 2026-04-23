@@ -52,6 +52,7 @@ export async function POST(request: Request) {
     const result = await upsertWatchHistoryForProfile({
       profileId: active.profileId,
       contentItemId,
+      viewerRole: active.viewerRole,
       progressSeconds,
       durationSeconds: durationSeconds ?? null,
       ended: ended === true

@@ -16,7 +16,7 @@ export async function GET() {
 
   try {
     const [items, idSet] = await Promise.all([
-      listWatchlistCardsForProfile(gate.profileId),
+      listWatchlistCardsForProfile(gate.profileId, gate.viewerRole),
       getWatchlistContentIdSetForProfile(gate.profileId)
     ]);
     return NextResponse.json({

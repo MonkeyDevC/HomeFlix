@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { AdminPageHeader } from "../../../../../components/admin/admin-page-header";
 import { AdminSectionCard } from "../../../../../components/admin/admin-section-card";
 import { CategoryForm } from "../../../../../components/admin/category-form";
+import { ReleaseScopeBadge } from "../../../../../components/admin/status-badges";
 import { getFamilyPrisma } from "../../../../../lib/server/db";
 
 export default async function AdminCategoryEditPage({
@@ -17,11 +18,23 @@ export default async function AdminCategoryEditPage({
 
   return (
     <div>
-      <AdminPageHeader description={`Editando carrusel · slug ${row.slug}`} title={row.name} />
+      <AdminPageHeader
+        actions={
+          <div className="hf-admin-page-head-badges">
+            <ReleaseScopeBadge releaseScope={row.releaseScope} />
+          </div>
+        }
+        description={`Editando carrusel · slug ${row.slug}`}
+        title={row.name}
+      />
       <AdminSectionCard eyebrow="Carrusel" title="Datos del carrusel">
         <CategoryForm
           categoryId={row.id}
-          initial={{ name: row.name, slug: row.slug }}
+          initial={{
+            name: row.name,
+            releaseScope: row.releaseScope === "admin_only" ? "admin_only" : "public_catalog",
+            slug: row.slug
+          }}
           mode="edit"
         />
       </AdminSectionCard>

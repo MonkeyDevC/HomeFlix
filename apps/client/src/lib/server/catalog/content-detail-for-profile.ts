@@ -3,10 +3,12 @@ import type { Prisma } from "../../../generated/prisma-family/client";
 import type {
   ContentDetailForProfileFamily,
   LocalPlaybackDto,
-  LocalPlaybackStateFamily
+  LocalPlaybackStateFamily,
+  UserRoleFamily
 } from "../../family/domain-shapes";
 import { getFamilyPrisma } from "../db";
 import { isManagedStoragePath, resolveStorageDiskPath } from "../storage/family-storage";
+import { prismaWhereStorefrontVisibleContent } from "./content-storefront-visibility";
 
 const detailSelect = {
   id: true,
@@ -14,6 +16,7 @@ const detailSelect = {
   title: true,
   synopsis: true,
   editorialStatus: true,
+  releaseScope: true,
   type: true,
   visibility: true,
   posterPath: true,
@@ -62,6 +65,7 @@ function mapDetail(row: DetailRaw): ContentDetailForProfileFamily["item"] {
     title: row.title,
     synopsis: row.synopsis,
     editorialStatus: row.editorialStatus as ContentDetailForProfileFamily["item"]["editorialStatus"],
+    releaseScope: row.releaseScope as ContentDetailForProfileFamily["item"]["releaseScope"],
     type: row.type as ContentDetailForProfileFamily["item"]["type"],
     visibility: row.visibility as ContentDetailForProfileFamily["item"]["visibility"],
     posterPath: row.posterPath,
@@ -150,17 +154,17 @@ export async function resolveLocalPlaybackForContent(
   return { state: "ready", playback };
 }
 
-/** Detalle Family V1 filtrado por perfil activo (published + access row). */
+/** Detalle Family V1 filtrado por perfil activo y reglas de catálogo (`releaseScope` + editorial + acceso). */
 export async function getContentDetailForActiveProfile(
   slug: string,
-  profileId: string
+  profileId: string,
+  viewerRole: UserRoleFamily
 ): Promise<ContentDetailForProfileFamily | null> {
   const prisma = getFamilyPrisma();
   const row = await prisma.contentItem.findFirst({
     where: {
       slug,
-      editorialStatus: "published",
-      accessGrants: { some: { profileId } }
+      AND: [prismaWhereStorefrontVisibleContent(profileId, viewerRole)]
     },
     select: detailSelect
   });

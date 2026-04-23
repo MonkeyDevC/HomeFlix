@@ -15,12 +15,18 @@ export async function GET() {
     const prisma = getFamilyPrisma();
     const rows = await prisma.profile.findMany({
       orderBy: [{ displayName: "asc" }],
-      select: { id: true, displayName: true, userId: true }
+      select: {
+        id: true,
+        displayName: true,
+        userId: true,
+        user: { select: { email: true } }
+      }
     });
     const items: AdminProfileOptionDto[] = rows.map((p) => ({
       id: p.id,
       displayName: p.displayName,
-      userId: p.userId
+      userId: p.userId,
+      userEmail: p.user.email
     }));
     return NextResponse.json({ items });
   } catch (error) {

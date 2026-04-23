@@ -13,7 +13,7 @@ export async function GET() {
   const active = gate;
 
   try {
-    const items = await listContinueWatchingForProfile(active.profileId);
+    const items = await listContinueWatchingForProfile(active.profileId, active.viewerRole);
     return NextResponse.json({
       profileId: active.profileId,
       profileDisplayName: active.displayName,

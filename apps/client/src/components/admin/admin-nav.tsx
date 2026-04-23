@@ -8,7 +8,8 @@ import {
   IconFilm,
   IconGrid,
   IconHome,
-  IconSeries
+  IconSeries,
+  IconUsers
 } from "./admin-nav-icons";
 
 type Item = Readonly<{
@@ -23,6 +24,10 @@ const primary: readonly Item[] = [
   { href: "/admin/categories", label: "Categorías", icon: <IconGrid /> },
   { href: "/admin/collections", label: "Series", icon: <IconSeries /> },
   { href: "/admin/content", label: "Contenido", icon: <IconFilm /> }
+];
+
+const access: readonly Item[] = [
+  { href: "/admin/users", label: "Usuarios", icon: <IconUsers /> }
 ];
 
 const secondary: readonly Item[] = [
@@ -48,6 +53,24 @@ export function AdminNav() {
           const active = item.exact === true
             ? pathname === item.href || pathname === `${item.href}/`
             : pathname === item.href || pathname.startsWith(`${item.href}/`);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`hf-admin-sidebar-link${active ? " is-active" : ""}`}
+            >
+              <span className="hf-admin-icon">{item.icon}</span>
+              <span>{item.label}</span>
+            </Link>
+          );
+        })}
+      </div>
+
+      <div className="hf-admin-sidebar-section">
+        <p className="hf-admin-sidebar-label">Acceso</p>
+        {access.map((item) => {
+          const active =
+            pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
             <Link
               key={item.href}

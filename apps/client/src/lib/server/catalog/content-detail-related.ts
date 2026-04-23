@@ -1,9 +1,11 @@
 import type { Prisma } from "../../../generated/prisma-family/client";
 import type {
   ContentDetailFamilyDto,
-  ContentTypeFamily
+  ContentTypeFamily,
+  UserRoleFamily
 } from "../../family/domain-shapes";
 import { getFamilyPrisma } from "../db";
+import { prismaWhereStorefrontVisibleContent } from "./content-storefront-visibility";
 
 export type DetailEpisodeDto = Readonly<{
   id: string;
@@ -61,6 +63,23 @@ const siblingSelect = {
 
 type SiblingRaw = Prisma.ContentItemGetPayload<{ select: typeof siblingSelect }>;
 
+function sortDetailEpisodesAsc(
+  episodes: readonly DetailEpisodeDto[]
+): readonly DetailEpisodeDto[] {
+  return [...episodes].sort((a, b) => {
+    const seasonA = a.seasonNumber ?? Number.POSITIVE_INFINITY;
+    const seasonB = b.seasonNumber ?? Number.POSITIVE_INFINITY;
+    if (seasonA !== seasonB) return seasonA - seasonB;
+
+    const epA = a.episodeNumber ?? Number.POSITIVE_INFINITY;
+    const epB = b.episodeNumber ?? Number.POSITIVE_INFINITY;
+    if (epA !== epB) return epA - epB;
+
+    if (a.position !== b.position) return a.position - b.position;
+    return a.title.localeCompare(b.title);
+  });
+}
+
 function toRelatedItem(row: {
   id: string;
   slug: string;
@@ -88,10 +107,12 @@ function toRelatedItem(row: {
  */
 export async function getRelatedForContentDetail(
   item: ContentDetailFamilyDto,
-  profileId: string
+  profileId: string,
+  viewerRole: UserRoleFamily
 ): Promise<DetailRelatedDataDto> {
   const prisma = getFamilyPrisma();
   const primaryCollection = item.collections[0] ?? null;
+  const visibleWhere = prismaWhereStorefrontVisibleContent(profileId, viewerRole);
 
   const [collectionLinks, moreRaw] = await Promise.all([
     primaryCollection === null
@@ -105,8 +126,7 @@ export async function getRelatedForContentDetail(
           where: {
             collectionId: primaryCollection.id,
             contentItem: {
-              editorialStatus: "published",
-              accessGrants: { some: { profileId } }
+              AND: [visibleWhere]
             }
           },
           orderBy: { position: "asc" },
@@ -119,10 +139,11 @@ export async function getRelatedForContentDetail(
       ? Promise.resolve([] as SiblingRaw[])
       : prisma.contentItem.findMany({
           where: {
-            editorialStatus: "published",
-            categoryId: item.category.id,
-            id: { not: item.id },
-            accessGrants: { some: { profileId } }
+            AND: [
+              visibleWhere,
+              { categoryId: item.category.id },
+              { id: { not: item.id } }
+            ]
           },
           orderBy: [{ updatedAt: "desc" }, { title: "asc" }],
           take: 6,
@@ -145,6 +166,30 @@ export async function getRelatedForContentDetail(
     );
   }
 
+  const seriesEpisodes =
+    primaryCollection === null
+      ? []
+      : collectionLinks.map<DetailEpisodeDto>((link) => {
+          const ep = link.contentItem;
+          const media = ep.mediaAssets[0] ?? null;
+          return {
+            id: ep.id,
+            slug: ep.slug,
+            title: ep.title,
+            synopsis: ep.synopsis,
+            type: ep.type as ContentTypeFamily,
+            thumbnailPath: ep.thumbnailPath,
+            posterPath: ep.posterPath,
+            position: link.position,
+            seasonNumber: ep.seasonNumber,
+            episodeNumber: ep.episodeNumber,
+            durationSeconds: media?.durationSeconds ?? null,
+            progressSeconds: progressByItemId.get(ep.id) ?? null,
+            hasMedia: media !== null,
+            isCurrent: ep.id === item.id
+          };
+        });
+
   const series =
     primaryCollection === null || collectionLinks.length === 0
       ? null
@@ -152,26 +197,7 @@ export async function getRelatedForContentDetail(
           collectionId: primaryCollection.id,
           collectionSlug: primaryCollection.slug,
           collectionName: primaryCollection.name,
-          episodes: collectionLinks.map<DetailEpisodeDto>((link) => {
-            const ep = link.contentItem;
-            const media = ep.mediaAssets[0] ?? null;
-            return {
-              id: ep.id,
-              slug: ep.slug,
-              title: ep.title,
-              synopsis: ep.synopsis,
-              type: ep.type as ContentTypeFamily,
-              thumbnailPath: ep.thumbnailPath,
-              posterPath: ep.posterPath,
-              position: link.position,
-              seasonNumber: ep.seasonNumber,
-              episodeNumber: ep.episodeNumber,
-              durationSeconds: media?.durationSeconds ?? null,
-              progressSeconds: progressByItemId.get(ep.id) ?? null,
-              hasMedia: media !== null,
-              isCurrent: ep.id === item.id
-            };
-          })
+          episodes: sortDetailEpisodesAsc(seriesEpisodes)
         };
 
   return {

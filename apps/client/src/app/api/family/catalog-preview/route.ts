@@ -59,10 +59,10 @@ export async function GET(request: Request) {
   }
 
   try {
-    const items = await listPublishedCatalogForProfile(targetProfileId);
+    const items = await listPublishedCatalogForProfile(targetProfileId, session.role);
     return NextResponse.json({
       profileId: targetProfileId,
-      rule: "published_and_profile_content_access",
+      rule: "storefront_visibility_release_scope_profile_content_access",
       count: items.length,
       items
     });

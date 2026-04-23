@@ -6,17 +6,18 @@ import { AdminInfoHint } from "../../../../components/admin/admin-info-hint";
 import { IconPencil } from "../../../../components/admin/admin-nav-icons";
 import { AdminPageHeader } from "../../../../components/admin/admin-page-header";
 import { AdminTable, AdminTd, AdminTh } from "../../../../components/admin/admin-table";
+import { ReleaseScopeBadge } from "../../../../components/admin/status-badges";
 import { getFamilyPrisma } from "../../../../lib/server/db";
 
 export default async function AdminCategoriesPage() {
-  let rows: { id: string; slug: string; name: string }[] = [];
+  let rows: { id: string; slug: string; name: string; releaseScope: string }[] = [];
   let dbError: string | null = null;
 
   try {
     const prisma = getFamilyPrisma();
     rows = await prisma.category.findMany({
       orderBy: { name: "asc" },
-      select: { id: true, slug: true, name: true }
+      select: { id: true, slug: true, name: true, releaseScope: true }
     });
   } catch (e) {
     dbError = e instanceof Error ? e.message : "db_error";
@@ -35,7 +36,8 @@ export default async function AdminCategoriesPage() {
       />
 
       <AdminInfoHint>
-        Usa nombres claros y familiares: así es como los perfiles verán estas filas en el home.
+        Los carruseles públicos aparecen en el home familiar; los internos solo los ven administradores en el mismo
+        home.
       </AdminInfoHint>
 
       {dbError !== null ? (
@@ -51,6 +53,7 @@ export default async function AdminCategoriesPage() {
             <tr>
               <AdminTh>Nombre</AdminTh>
               <AdminTh>Slug interno</AdminTh>
+              <AdminTh>Catálogo</AdminTh>
               <AdminTh style={{ width: "220px" }}>Acciones</AdminTh>
             </tr>
           </thead>
@@ -62,6 +65,9 @@ export default async function AdminCategoriesPage() {
                 </AdminTd>
                 <AdminTd>
                   <code>{r.slug}</code>
+                </AdminTd>
+                <AdminTd>
+                  <ReleaseScopeBadge releaseScope={r.releaseScope} />
                 </AdminTd>
                 <AdminTd>
                   <div className="hf-admin-table-actions">

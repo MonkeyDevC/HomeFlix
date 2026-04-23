@@ -71,11 +71,9 @@ export function ProfileAccessEditor({
               onChange={() => toggle(p.id)}
               type="checkbox"
             />
-            <span style={{ flex: 1 }}>
+            <span className="hf-admin-access-row__text">
               <strong>{p.displayName}</strong>
-              <span style={{ color: "var(--hf-admin-muted)", fontSize: "0.8rem", marginLeft: "0.55rem" }}>
-                usuario <code>{p.userId}</code>
-              </span>
+              <span className="hf-admin-access-row__account">{p.userEmail}</span>
             </span>
           </label>
         ))}

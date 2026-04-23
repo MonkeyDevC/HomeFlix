@@ -82,6 +82,39 @@ export function StatusBadge({ status }: Readonly<{ status: string }>) {
   );
 }
 
+const releaseScopeTheme: Record<string, { bg: string; fg: string; dot: string; label: string }> = {
+  admin_only: {
+    bg: "rgba(56,189,248,0.14)",
+    fg: "#bae6fd",
+    dot: "#38bdf8",
+    label: "Preview admin"
+  },
+  public_catalog: {
+    bg: "rgba(52,211,153,0.14)",
+    fg: "#a7f3d0",
+    dot: "#34d399",
+    label: "Catálogo familiar"
+  }
+};
+
+export function ReleaseScopeBadge({ releaseScope }: Readonly<{ releaseScope: string }>) {
+  const t = releaseScopeTheme[releaseScope] ?? {
+    bg: "rgba(148,163,184,0.16)",
+    fg: "#e2e8f0",
+    dot: "#94a3b8",
+    label: releaseScope
+  };
+  return (
+    <span
+      style={{ ...base, background: t.bg, color: t.fg }}
+      title={`Alcance de lanzamiento: ${t.label}`}
+    >
+      <span style={{ ...dot, background: t.dot }} aria-hidden="true" />
+      {t.label}
+    </span>
+  );
+}
+
 export function VisibilityBadge({ visibility }: Readonly<{ visibility: string }>) {
   const t = visibilityTheme[visibility] ?? {
     bg: "rgba(148,163,184,0.16)",

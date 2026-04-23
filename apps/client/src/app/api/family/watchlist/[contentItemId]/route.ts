@@ -32,7 +32,7 @@ export async function POST(
   }
 
   try {
-    const result = await addToWatchlist(gate.profileId, contentItemId);
+    const result = await addToWatchlist(gate.profileId, contentItemId, gate.viewerRole);
     if (!result.ok) {
       return notFoundResponse();
     }

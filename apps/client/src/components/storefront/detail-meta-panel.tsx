@@ -156,6 +156,14 @@ export function DetailMetaPanel({
               <dt>Visibilidad</dt>
               <dd>{visibilityLabel(item.visibility)}</dd>
             </div>
+            <div className="sf-detail-meta-row">
+              <dt>En el hogar</dt>
+              <dd>
+                {item.releaseScope === "admin_only"
+                  ? "Vista previa solo administradores"
+                  : "Catálogo familiar"}
+              </dd>
+            </div>
           </dl>
         </section>
 

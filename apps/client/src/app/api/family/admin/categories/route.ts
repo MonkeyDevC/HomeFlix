@@ -2,7 +2,11 @@ import { Prisma } from "../../../../../generated/prisma-family/client";
 import { NextResponse } from "next/server";
 import type { AdminCategoryDto } from "../../../../../lib/family/admin-contracts";
 import { buildAdminSlugCandidate, ensureUniqueAdminSlug } from "../../../../../lib/server/admin/admin-slugs";
-import { assertValidSlug, optionalTrimmedString } from "../../../../../lib/server/admin/admin-validation";
+import {
+  assertReleaseScope,
+  assertValidSlug,
+  optionalTrimmedString
+} from "../../../../../lib/server/admin/admin-validation";
 import { requireAdminApi } from "../../../../../lib/server/auth/require-admin-api";
 import { getFamilyPrisma } from "../../../../../lib/server/db";
 
@@ -12,6 +16,7 @@ function mapCategory(c: {
   id: string;
   slug: string;
   name: string;
+  releaseScope: string;
   createdAt: Date;
   updatedAt: Date;
 }): AdminCategoryDto {
@@ -19,6 +24,7 @@ function mapCategory(c: {
     id: c.id,
     slug: c.slug,
     name: c.name,
+    releaseScope: c.releaseScope,
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString()
   };
@@ -73,6 +79,15 @@ export async function POST(request: Request) {
     }
   }
 
+  const releaseScopeRaw =
+    typeof (body as { releaseScope?: unknown }).releaseScope === "string"
+      ? (body as { releaseScope: string }).releaseScope.trim()
+      : "public_catalog";
+  const rsErr = assertReleaseScope(releaseScopeRaw);
+  if (rsErr !== null) {
+    return NextResponse.json({ error: "validation", message: rsErr }, { status: 400 });
+  }
+
   try {
     const prisma = getFamilyPrisma();
     const baseSlug = buildAdminSlugCandidate(nameOk.value, hasExplicitSlug ? (slugRaw as string) : null);
@@ -86,7 +101,8 @@ export async function POST(request: Request) {
     const created = await prisma.category.create({
       data: {
         slug: finalSlug,
-        name: nameOk.value
+        name: nameOk.value,
+        releaseScope: releaseScopeRaw
       }
     });
     return NextResponse.json({ item: mapCategory(created) }, { status: 201 });

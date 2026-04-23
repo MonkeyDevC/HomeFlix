@@ -59,13 +59,13 @@ export async function POST(request: Request) {
   const { kind, id, action } = parsed.input;
 
   try {
-    const contentItemId = await resolveWatchlistContentItemId(gate.profileId, { kind, id });
+    const contentItemId = await resolveWatchlistContentItemId(gate.profileId, { kind, id }, gate.viewerRole);
     if (contentItemId === null) {
       return notFoundResponse();
     }
 
     if (action === "add") {
-      const result = await addToWatchlist(gate.profileId, contentItemId);
+      const result = await addToWatchlist(gate.profileId, contentItemId, gate.viewerRole);
       if (!result.ok) {
         return notFoundResponse();
       }

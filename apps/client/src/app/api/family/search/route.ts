@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   const query = new URL(request.url).searchParams.get("q") ?? "";
 
   try {
-    const result = await searchFamilyCatalogForProfile(active.profileId, query);
+    const result = await searchFamilyCatalogForProfile(active, query);
     return NextResponse.json({
       profileId: active.profileId,
       profileDisplayName: active.displayName,

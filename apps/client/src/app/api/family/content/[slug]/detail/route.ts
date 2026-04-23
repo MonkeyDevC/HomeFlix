@@ -17,13 +17,13 @@ export async function GET(
 
   const { slug } = await ctx.params;
   try {
-    const detail = await getContentDetailForActiveProfile(slug, active.profileId);
+    const detail = await getContentDetailForActiveProfile(slug, active.profileId, active.viewerRole);
     if (detail === null) {
       return notFoundResponse();
     }
     return NextResponse.json({
       profileId: active.profileId,
-      rule: "published_and_profile_content_access_and_local_media",
+      rule: "storefront_visibility_release_scope_profile_access_and_local_media",
       item: detail.item,
       playback: detail.playback
     });

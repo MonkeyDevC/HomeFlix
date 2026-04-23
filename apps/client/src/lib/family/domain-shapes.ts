@@ -12,11 +12,14 @@ export type ContentVisibilityFamily = "private" | "household" | "public_internal
 
 export type ContentTypeFamily = "movie" | "clip" | "episode";
 
+/** Alcance de lanzamiento en storefront (independiente del estado editorial). */
+export type ContentReleaseScopeFamily = "admin_only" | "public_catalog";
+
 export type UserRoleFamily = "admin" | "family_viewer";
 
 export type MediaAssetStatusFamily = "pending" | "ready" | "archived";
 
-/** Invariante de producto: publicado + fila de acceso explícita (ver `catalog-for-profile.ts`). */
+/** Invariante de producto en catálogo familiar: publicado + public_catalog + fila de acceso (ver `content-storefront-visibility.ts`). */
 export type ContentItemCatalogRowFamily = Readonly<{
   id: string;
   slug: string;
@@ -77,6 +80,7 @@ export type ContentDetailFamilyDto = Readonly<{
   title: string;
   synopsis: string | null;
   editorialStatus: EditorialStatusFamily;
+  releaseScope: ContentReleaseScopeFamily;
   type: ContentTypeFamily;
   visibility: ContentVisibilityFamily;
   posterPath: string | null;

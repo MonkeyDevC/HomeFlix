@@ -17,10 +17,11 @@ import {
   IconSpinner
 } from "./admin-nav-icons";
 import { MediaDropzoneCard } from "./media-dropzone-card";
+import { ReleaseScopeSection } from "./release-scope-section";
 
 type CategoryOption = Readonly<{ id: string; name: string }>;
 type CollectionOption = Readonly<{ id: string; name: string }>;
-type ProfileOption = Readonly<{ id: string; displayName: string; userId: string }>;
+type ProfileOption = Readonly<{ id: string; displayName: string; userId: string; userEmail: string }>;
 
 type ContentKind = "movie" | "episode" | "clip";
 type EditorialStatus = "draft" | "published" | "archived";
@@ -109,6 +110,7 @@ export function ContentCreateWizard({ categories, collections, profiles, preset 
   const [episodeNumber, setEpisodeNumber] = useState("");
 
   const [editorialStatus, setEditorialStatus] = useState<EditorialStatus>("draft");
+  const [releaseScope, setReleaseScope] = useState<"admin_only" | "public_catalog">("admin_only");
   const [visibility, setVisibility] = useState<Visibility>("household");
   const [selectedProfileIds, setSelectedProfileIds] = useState<ReadonlyArray<string>>(
     profiles.map((p) => p.id)
@@ -133,6 +135,7 @@ export function ContentCreateWizard({ categories, collections, profiles, preset 
             title: "Borrador sin título",
             type,
             editorialStatus: "draft",
+            releaseScope: "admin_only",
             visibility: "private"
           })
         });
@@ -231,6 +234,7 @@ export function ContentCreateWizard({ categories, collections, profiles, preset 
       synopsis: synopsis.trim() === "" ? null : synopsis.trim(),
       type,
       editorialStatus,
+      releaseScope,
       visibility,
       categoryId: categoryId.trim() === "" ? null : categoryId,
       releaseYear: releaseYear.trim() === "" ? null : Number.parseInt(releaseYear, 10),
@@ -375,6 +379,8 @@ export function ContentCreateWizard({ categories, collections, profiles, preset 
           <StepVisibility
             editorialStatus={editorialStatus}
             onEditorialStatusChange={setEditorialStatus}
+            releaseScope={releaseScope}
+            onReleaseScopeChange={setReleaseScope}
             visibility={visibility}
             onVisibilityChange={setVisibility}
             profiles={profiles}
@@ -714,6 +720,8 @@ function StepInfo({
 function StepVisibility({
   editorialStatus,
   onEditorialStatusChange,
+  releaseScope,
+  onReleaseScopeChange,
   visibility,
   onVisibilityChange,
   profiles,
@@ -722,6 +730,8 @@ function StepVisibility({
 }: Readonly<{
   editorialStatus: EditorialStatus;
   onEditorialStatusChange: (v: EditorialStatus) => void;
+  releaseScope: "admin_only" | "public_catalog";
+  onReleaseScopeChange: (v: "admin_only" | "public_catalog") => void;
   visibility: Visibility;
   onVisibilityChange: (v: Visibility) => void;
   profiles: ReadonlyArray<ProfileOption>;
@@ -732,6 +742,9 @@ function StepVisibility({
     <section className="hf-admin-wizard__section">
       <h2 className="hf-admin-wizard__section-title">Step 4 - Visibilidad &amp; Acceso</h2>
       <div className="hf-admin-wizard__visibility-grid">
+        <div className="hf-admin-wizard__fieldset" style={{ gridColumn: "1 / -1" }}>
+          <ReleaseScopeSection onChange={onReleaseScopeChange} value={releaseScope} />
+        </div>
         <fieldset className="hf-admin-wizard__fieldset">
           <legend className="hf-admin-wizard__legend">Estado</legend>
           <div className="hf-admin-radio-group">
@@ -781,7 +794,7 @@ function StepVisibility({
               {profiles.map((p) => {
                 const checked = selectedProfileIds.includes(p.id);
                 return (
-                  <label key={p.id} className="hf-admin-check-option">
+                  <label key={p.id} className="hf-admin-check-option hf-admin-check-option--stack">
                     <input
                       type="checkbox"
                       checked={checked}
@@ -790,7 +803,10 @@ function StepVisibility({
                     <span className="hf-admin-check-option__box" aria-hidden>
                       {checked ? <IconCheck /> : null}
                     </span>
-                    <span>{p.displayName}</span>
+                    <span className="hf-admin-check-option__label-stack">
+                      <span className="hf-admin-check-option__title">{p.displayName}</span>
+                      <span className="hf-admin-check-option__sub">{p.userEmail}</span>
+                    </span>
                   </label>
                 );
               })}

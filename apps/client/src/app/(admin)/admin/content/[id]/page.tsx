@@ -9,7 +9,7 @@ import type { ContentItemFormInitial } from "../../../../../components/admin/con
 import { ContentItemForm } from "../../../../../components/admin/content-item-form";
 import { IntegratedMediaSection } from "../../../../../components/admin/integrated-media-section";
 import { ProfileAccessEditor } from "../../../../../components/admin/profile-access-editor";
-import { StatusBadge, VisibilityBadge } from "../../../../../components/admin/status-badges";
+import { ReleaseScopeBadge, StatusBadge, VisibilityBadge } from "../../../../../components/admin/status-badges";
 import { mapMediaAssetToDto } from "../../../../../lib/server/admin/media-asset-mapper";
 import { getFamilyPrisma } from "../../../../../lib/server/db";
 
@@ -29,7 +29,12 @@ export default async function AdminContentEditPage({
     prisma.collection.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.profile.findMany({
       orderBy: { displayName: "asc" },
-      select: { id: true, displayName: true, userId: true }
+      select: {
+        id: true,
+        displayName: true,
+        userId: true,
+        user: { select: { email: true } }
+      }
     }),
     prisma.contentItemCollectionLink.findMany({
       where: { contentItemId: id },
@@ -46,6 +51,7 @@ export default async function AdminContentEditPage({
   const initial: ContentItemFormInitial = {
     categoryId: item.categoryId ?? "",
     editorialStatus: item.editorialStatus,
+    releaseScope: item.releaseScope === "admin_only" ? "admin_only" : "public_catalog",
     posterPath: item.posterPath ?? "",
     slug: item.slug,
     synopsis: item.synopsis ?? "",
@@ -64,7 +70,8 @@ export default async function AdminContentEditPage({
   const profileOptions: AdminProfileOptionDto[] = profiles.map((p) => ({
     displayName: p.displayName,
     id: p.id,
-    userId: p.userId
+    userId: p.userId,
+    userEmail: p.user.email
   }));
 
   const initialProfileIds = grants.map((g) => g.profileId);
@@ -84,6 +91,7 @@ export default async function AdminContentEditPage({
         actions={
           <div className="hf-admin-page-head-badges">
             <StatusBadge status={item.editorialStatus} />
+            <ReleaseScopeBadge releaseScope={item.releaseScope} />
             <VisibilityBadge visibility={item.visibility} />
           </div>
         }

@@ -13,7 +13,8 @@ const LABELS: Record<string, string> = {
   categories: "Categorías",
   collections: "Series",
   content: "Contenido",
-  new: "Nuevo"
+  new: "Nuevo",
+  users: "Usuarios"
 };
 
 function labelFor(segment: string): string {

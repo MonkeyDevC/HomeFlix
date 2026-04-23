@@ -7,9 +7,9 @@ Panel **admin** dentro del monolito `apps/client` para gestionar el catálogo ed
 ## Rutas UI
 
 - `/admin` — resumen y contadores.
-- `/admin/categories` — listado, crear, editar, eliminar.
+- `/admin/categories` — listado, crear, editar, eliminar; cada carrusel tiene `release_scope` (interno vs catálogo familiar).
 - `/admin/collections` — listado, crear, editar, eliminar.
-- `/admin/content` — listado con estado editorial, visibilidad y número de perfiles con acceso.
+- `/admin/content` — listado con estado editorial, alcance de catálogo (`release_scope`), visibilidad y número de perfiles con acceso.
 - `/admin/content/new` — alta de ítem (sin uploads).
 - `/admin/content/[id]` — ficha: formulario editorial, editor de colecciones, editor de accesos por perfil.
 
@@ -33,7 +33,8 @@ Contratos TypeScript: `apps/client/src/lib/family/admin-contracts.ts`.
 
 - Solo usuarios con rol **`admin`** entran a `(admin)` y a las APIs admin (doble chequeo: layout + API).
 - Un **ContentItem** publicado **sin** filas en `ProfileContentAccess` **no** aparece en el catálogo de ningún perfil.
-- **draft** / **archived** no se tratan como visibles en consumo (la lógica de catálogo sigue en capa catálogo; el admin solo edita datos y asignaciones).
+- **`release_scope`**: `admin_only` (vista previa interna para admins) vs `public_catalog` (elegible para catálogo familiar cuando además está publicado y con acceso).
+- **draft** / **archived** no se tratan como visibles en consumo para el catálogo familiar (la lógica de catálogo está en servidor; el admin solo edita datos y asignaciones).
 
 ## Fuera de alcance en esta fase
 

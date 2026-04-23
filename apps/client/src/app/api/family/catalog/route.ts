@@ -16,10 +16,10 @@ export async function GET() {
     }
     const active = gate;
 
-    const items = await listPublishedCatalogForProfile(active.profileId);
+    const items = await listPublishedCatalogForProfile(active.profileId, active.viewerRole);
     return NextResponse.json({
       profileId: active.profileId,
-      rule: "published_and_profile_content_access",
+      rule: "storefront_visibility_release_scope_profile_content_access",
       count: items.length,
       items
     });

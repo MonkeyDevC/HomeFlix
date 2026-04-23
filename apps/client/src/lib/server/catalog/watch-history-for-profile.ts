@@ -1,6 +1,8 @@
+import type { UserRoleFamily } from "../../family/domain-shapes";
 import type { FamilyContinueWatchingItemDto } from "../../family/storefront-contracts";
 import { getFamilyPrisma } from "../db";
 import { resolveLocalPlaybackForContent } from "./content-detail-for-profile";
+import { prismaWhereStorefrontVisibleContent } from "./content-storefront-visibility";
 
 const MIN_PROGRESS_SECONDS = 2;
 const COMPLETED_RATIO = 0.95;
@@ -10,6 +12,7 @@ type HistoryVisibilityError = "content_not_visible" | "media_not_playable";
 type UpsertInput = Readonly<{
   profileId: string;
   contentItemId: string;
+  viewerRole: UserRoleFamily;
   progressSeconds: number;
   durationSeconds: number | null;
   ended: boolean;
@@ -28,14 +31,14 @@ type UpsertResult =
 
 async function assertVisibleAndPlayable(
   profileId: string,
-  contentItemId: string
+  contentItemId: string,
+  viewerRole: UserRoleFamily
 ): Promise<HistoryVisibilityError | null> {
   const prisma = getFamilyPrisma();
   const visible = await prisma.contentItem.findFirst({
     where: {
       id: contentItemId,
-      editorialStatus: "published",
-      accessGrants: { some: { profileId } }
+      AND: [prismaWhereStorefrontVisibleContent(profileId, viewerRole)]
     },
     select: { id: true }
   });
@@ -69,7 +72,11 @@ export async function upsertWatchHistoryForProfile(input: UpsertInput): Promise<
     return { ok: true, result: { kind: "ignored", reason: "too_short" } };
   }
 
-  const visibility = await assertVisibleAndPlayable(input.profileId, input.contentItemId);
+  const visibility = await assertVisibleAndPlayable(
+    input.profileId,
+    input.contentItemId,
+    input.viewerRole
+  );
   if (visibility !== null) {
     return { ok: false, error: visibility };
   }
@@ -119,17 +126,18 @@ export async function upsertWatchHistoryForProfile(input: UpsertInput): Promise<
 }
 
 export async function listContinueWatchingForProfile(
-  profileId: string
+  profileId: string,
+  viewerRole: UserRoleFamily
 ): Promise<readonly FamilyContinueWatchingItemDto[]> {
   const prisma = getFamilyPrisma();
+  const visibleWhere = prismaWhereStorefrontVisibleContent(profileId, viewerRole);
   const rows = await prisma.watchHistory.findMany({
     where: {
       profileId,
       completedAt: null,
       progressSeconds: { gte: MIN_PROGRESS_SECONDS },
       contentItem: {
-        editorialStatus: "published",
-        accessGrants: { some: { profileId } }
+        AND: [visibleWhere]
       }
     },
     orderBy: { updatedAt: "desc" },
@@ -220,9 +228,21 @@ export async function listContinueWatchingForProfile(
 
 export async function getWatchProgressForProfileContent(
   profileId: string,
-  contentItemId: string
+  contentItemId: string,
+  viewerRole: UserRoleFamily
 ): Promise<{ progressSeconds: number; durationSeconds: number | null } | null> {
   const prisma = getFamilyPrisma();
+  const visible = await prisma.contentItem.findFirst({
+    where: {
+      id: contentItemId,
+      AND: [prismaWhereStorefrontVisibleContent(profileId, viewerRole)]
+    },
+    select: { id: true }
+  });
+  if (visible === null) {
+    return null;
+  }
+
   const row = await prisma.watchHistory.findUnique({
     where: {
       profileId_contentItemId: {

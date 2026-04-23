@@ -1,6 +1,10 @@
 import { Prisma } from "../../../../../../generated/prisma-family/client";
 import { NextResponse } from "next/server";
-import { assertValidSlug, optionalTrimmedString } from "../../../../../../lib/server/admin/admin-validation";
+import {
+  assertReleaseScope,
+  assertValidSlug,
+  optionalTrimmedString
+} from "../../../../../../lib/server/admin/admin-validation";
 import { requireAdminApi } from "../../../../../../lib/server/auth/require-admin-api";
 import { getFamilyPrisma } from "../../../../../../lib/server/db";
 import type { AdminCategoryDto } from "../../../../../../lib/family/admin-contracts";
@@ -11,6 +15,7 @@ function mapCategory(c: {
   id: string;
   slug: string;
   name: string;
+  releaseScope: string;
   createdAt: Date;
   updatedAt: Date;
 }): AdminCategoryDto {
@@ -18,6 +23,7 @@ function mapCategory(c: {
     id: c.id,
     slug: c.slug,
     name: c.name,
+    releaseScope: c.releaseScope,
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString()
   };
@@ -67,7 +73,7 @@ export async function PATCH(
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 
-  const data: { slug?: string; name?: string } = {};
+  const data: { slug?: string; name?: string; releaseScope?: string } = {};
 
   if ((body as { slug?: unknown }).slug !== undefined) {
     const s = (body as { slug: unknown }).slug;
@@ -87,6 +93,18 @@ export async function PATCH(
       return NextResponse.json({ error: "validation", message: "Nombre inválido." }, { status: 400 });
     }
     data.name = n.value;
+  }
+
+  if ((body as { releaseScope?: unknown }).releaseScope !== undefined) {
+    const r = (body as { releaseScope: unknown }).releaseScope;
+    if (typeof r !== "string") {
+      return NextResponse.json({ error: "validation", message: "releaseScope inválido." }, { status: 400 });
+    }
+    const err = assertReleaseScope(r.trim());
+    if (err !== null) {
+      return NextResponse.json({ error: "validation", message: err }, { status: 400 });
+    }
+    data.releaseScope = r.trim();
   }
 
   if (Object.keys(data).length === 0) {

@@ -26,13 +26,22 @@ export async function GET(
 
     const rows = await prisma.profileContentAccess.findMany({
       where: { contentItemId },
-      include: { profile: { select: { displayName: true, userId: true } } }
+      include: {
+        profile: {
+          select: {
+            displayName: true,
+            userId: true,
+            user: { select: { email: true } }
+          }
+        }
+      }
     });
 
     const grants: AdminProfileAccessDto[] = rows.map((r) => ({
       profileId: r.profileId,
       displayName: r.profile.displayName,
-      userId: r.profile.userId
+      userId: r.profile.userId,
+      userEmail: r.profile.user.email
     }));
 
     return NextResponse.json({ grants });
@@ -106,13 +115,22 @@ export async function PUT(
 
     const rows = await prisma.profileContentAccess.findMany({
       where: { contentItemId },
-      include: { profile: { select: { displayName: true, userId: true } } }
+      include: {
+        profile: {
+          select: {
+            displayName: true,
+            userId: true,
+            user: { select: { email: true } }
+          }
+        }
+      }
     });
 
     const grants: AdminProfileAccessDto[] = rows.map((r) => ({
       profileId: r.profileId,
       displayName: r.profile.displayName,
-      userId: r.profile.userId
+      userId: r.profile.userId,
+      userEmail: r.profile.user.email
     }));
 
     return NextResponse.json({ grants });

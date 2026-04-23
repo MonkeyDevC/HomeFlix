@@ -11,7 +11,9 @@ export default async function HomePage() {
 
   try {
     const home = await getFamilyHomeForProfile(active);
-    const continueWatching = await listContinueWatchingForProfile(active.profileId).catch(() => []);
+    const continueWatching = await listContinueWatchingForProfile(active.profileId, active.viewerRole).catch(
+      () => []
+    );
     return <FamilyHomeView continueWatching={continueWatching} home={home} />;
   } catch (error) {
     return (

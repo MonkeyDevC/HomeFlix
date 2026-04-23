@@ -12,7 +12,7 @@ export default async function SeriesDetailPage({
 }>) {
   const { slug } = await params;
   const active = await requireStorefrontAccess(`/series/${slug}`);
-  const detail = await getSeriesDetailForActiveProfile(slug, active.profileId);
+  const detail = await getSeriesDetailForActiveProfile(slug, active.profileId, active.viewerRole);
 
   if (detail === null) {
     notFound();

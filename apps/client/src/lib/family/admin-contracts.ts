@@ -4,6 +4,8 @@ export type AdminCategoryDto = Readonly<{
   id: string;
   slug: string;
   name: string;
+  /** admin_only | public_catalog */
+  releaseScope: string;
   createdAt: string;
   updatedAt: string;
 }>;
@@ -22,6 +24,8 @@ export type AdminContentItemListDto = Readonly<{
   slug: string;
   title: string;
   editorialStatus: string;
+  /** admin_only | public_catalog */
+  releaseScope: string;
   visibility: string;
   type: string;
   categoryId: string | null;
@@ -35,6 +39,8 @@ export type AdminContentItemDetailDto = Readonly<{
   title: string;
   synopsis: string | null;
   editorialStatus: string;
+  /** admin_only | public_catalog */
+  releaseScope: string;
   visibility: string;
   type: string;
   thumbnailPath: string | null;
@@ -60,12 +66,14 @@ export type AdminProfileAccessDto = Readonly<{
   profileId: string;
   displayName: string;
   userId: string;
+  userEmail: string;
 }>;
 
 export type AdminProfileOptionDto = Readonly<{
   id: string;
   displayName: string;
   userId: string;
+  userEmail: string;
 }>;
 
 export type AdminMediaAssetDto = Readonly<{
@@ -89,4 +97,22 @@ export type AdminContentMediaSummaryDto = Readonly<{
   posterPath: string | null;
   thumbnailPath: string | null;
   videoAsset: AdminMediaAssetDto | null;
+}>;
+
+/** Usuario con credenciales (sin hash). */
+export type AdminUserSummaryDto = Readonly<{
+  id: string;
+  email: string;
+  role: string;
+  profileCount: number;
+  createdAt: string;
+  updatedAt: string;
+}>;
+
+export type AdminUserDetailDto = Readonly<{
+  id: string;
+  email: string;
+  role: string;
+  createdAt: string;
+  updatedAt: string;
 }>;
