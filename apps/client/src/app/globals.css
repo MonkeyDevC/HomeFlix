@@ -5103,6 +5103,23 @@ a.sf-detail-episode:hover .sf-detail-episode-play {
   font-weight: 700;
 }
 
+.hf-login-admin-portal {
+  margin: 0.35rem 0 0;
+  text-align: center;
+  font-size: 0.8rem;
+}
+
+.hf-login-admin-portal-link {
+  color: rgba(147, 197, 253, 0.95);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.hf-login-admin-portal-link:hover {
+  text-decoration: underline;
+  color: #bfdbfe;
+}
+
 .hf-login-recaptcha {
   margin: 0;
   font-size: 0.875rem;

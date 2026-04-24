@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { requireFamilyUser } from "./require-family-user";
 
 export async function requireAdminUser(nextPath: string) {
-  const user = await requireFamilyUser(nextPath);
+  const user = await requireFamilyUser(nextPath, "admin");
 
   if (user.role !== "admin") {
     redirect("/auth/forbidden?reason=admin_only");

@@ -2436,6 +2436,77 @@
   font-size: 0.85rem;
 }
 
+.hf-admin-dropzone__status--progress {
+  align-items: stretch;
+  width: 100%;
+  max-width: min(100%, 320px);
+  margin: 0 auto;
+  gap: 10px;
+}
+
+.hf-admin-dropzone--large .hf-admin-dropzone__status--progress {
+  max-width: min(100%, 400px);
+}
+
+.hf-admin-dropzone__progress-track {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.hf-admin-dropzone__progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    rgba(34, 197, 94, 0.75),
+    rgba(74, 222, 128, 0.95)
+  );
+  transition: width 0.12s ease-out;
+  min-width: 0;
+}
+
+.hf-admin-dropzone__progress-fill.is-indeterminate {
+  width: 32%;
+  animation: hf-admin-dropzone-progress-indeterminate 1.1s ease-in-out infinite;
+}
+
+@keyframes hf-admin-dropzone-progress-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(340%);
+  }
+}
+
+.hf-admin-dropzone__progress-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--hf-admin-fg-soft);
+}
+
+.hf-admin-dropzone__progress-label {
+  font-weight: 600;
+  color: var(--hf-admin-fg);
+}
+
+.hf-admin-dropzone__progress-file {
+  max-width: 100%;
+  font-size: 0.72rem;
+  color: var(--hf-admin-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .hf-admin-dropzone__spinner {
   color: var(--hf-admin-accent);
   animation: hf-admin-row-action-spin 0.9s linear infinite;

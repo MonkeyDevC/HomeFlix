@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type DragEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent, type MutableRefObject } from "react";
 import type { AdminContentMediaSummaryDto } from "../../lib/family/admin-contracts";
 import { adminParseJson } from "../../lib/family/admin-json";
 import { IconFilm, IconSpinner } from "./admin-nav-icons";
@@ -49,6 +49,86 @@ function filenameFromPath(p: string | null): string | null {
   return parts[parts.length - 1] ?? p;
 }
 
+type UploadJsonResult =
+  | { ok: true; item: AdminContentMediaSummaryDto }
+  | { ok: false; message: string };
+
+function readErrorFromJsonText(text: string): string | null {
+  try {
+    const j = JSON.parse(text) as { message?: string; error?: string };
+    if (typeof j.message === "string" && j.message.length > 0) return j.message;
+    if (typeof j.error === "string" && j.error.length > 0) return j.error;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function parseMediaUploadResponse(status: number, text: string): UploadJsonResult {
+  if (status < 200 || status >= 300) {
+    const fromBody = readErrorFromJsonText(text);
+    return {
+      ok: false,
+      message: fromBody ?? `Error ${status}`
+    };
+  }
+  try {
+    const data = JSON.parse(text) as { item?: AdminContentMediaSummaryDto };
+    if (data?.item !== undefined) {
+      return { ok: true, item: data.item };
+    }
+    return { ok: false, message: "Respuesta inesperada del servidor." };
+  } catch {
+    return { ok: false, message: "No se pudo leer la respuesta del servidor." };
+  }
+}
+
+/**
+ * POST multipart con cookies; progreso real del body (XHR upload).
+ * El 100 % indica bytes enviados; el servidor puede tardar un poco más en responder.
+ */
+function postFormDataWithUploadProgress(
+  url: string,
+  formData: FormData,
+  xhrRef: MutableRefObject<XMLHttpRequest | null>,
+  onProgress: (info: { percent: number | null }) => void
+): Promise<UploadJsonResult> {
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhrRef.current = xhr;
+    xhr.open("POST", url);
+    xhr.withCredentials = true;
+    xhr.responseType = "text";
+
+    xhr.upload.addEventListener("progress", (e) => {
+      if (e.lengthComputable && e.total > 0) {
+        const pct = Math.min(100, Math.round((100 * e.loaded) / e.total));
+        onProgress({ percent: pct });
+      } else {
+        onProgress({ percent: null });
+      }
+    });
+
+    xhr.addEventListener("load", () => {
+      xhrRef.current = null;
+      onProgress({ percent: 100 });
+      resolve(parseMediaUploadResponse(xhr.status, xhr.responseText));
+    });
+
+    xhr.addEventListener("error", () => {
+      xhrRef.current = null;
+      resolve({ ok: false, message: "Fallo de red al subir el archivo." });
+    });
+
+    xhr.addEventListener("abort", () => {
+      xhrRef.current = null;
+      resolve({ ok: false, message: "Subida cancelada." });
+    });
+
+    xhr.send(formData);
+  });
+}
+
 export function MediaDropzoneCard({
   contentId,
   kind,
@@ -60,10 +140,20 @@ export function MediaDropzoneCard({
   disabledReason
 }: Props) {
   const [busy, setBusy] = useState(false);
+  /** 0–100 durante subida; `null` = progreso no computable en este navegador. */
+  const [uploadPercent, setUploadPercent] = useState<number | null>(0);
+  const [uploadName, setUploadName] = useState<string | null>(null);
   const [repairing, setRepairing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const uploadXhrRef = useRef<XMLHttpRequest | null>(null);
+
+  useEffect(() => {
+    return () => {
+      uploadXhrRef.current?.abort();
+    };
+  }, []);
 
   const disabled = contentId === null || busy || repairing;
 
@@ -107,25 +197,31 @@ export function MediaDropzoneCard({
     }
     setBusy(true);
     setError(null);
+    setUploadName(file.name);
+    setUploadPercent(0);
     try {
       const endpoint = `/api/family/admin/content/${contentId}/media/${kind}`;
       const payload = new FormData();
       payload.append("file", file);
-      const res = await fetch(endpoint, {
-        method: "POST",
-        credentials: "include",
-        body: payload
-      });
-      const parsed = await adminParseJson<{ item: AdminContentMediaSummaryDto }>(res);
+      const parsed = await postFormDataWithUploadProgress(
+        endpoint,
+        payload,
+        uploadXhrRef,
+        ({ percent }) => {
+          setUploadPercent(percent);
+        }
+      );
       if (!parsed.ok) {
         setError(parsed.message);
         return;
       }
-      onUploaded(parsed.data.item);
+      onUploaded(parsed.item);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Fallo inesperado al subir.");
     } finally {
       setBusy(false);
+      setUploadName(null);
+      setUploadPercent(0);
     }
   }
 
@@ -205,9 +301,49 @@ export function MediaDropzoneCard({
       />
       <div className="hf-admin-dropzone__inner">
         {busy ? (
-          <div className="hf-admin-dropzone__status">
-            <IconSpinner className="hf-admin-dropzone__spinner" width={28} height={28} />
-            <span>Subiendo…</span>
+          <div className="hf-admin-dropzone__status hf-admin-dropzone__status--progress">
+            <div
+              className="hf-admin-dropzone__progress-track"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={uploadPercent ?? undefined}
+              aria-valuetext={
+                uploadPercent === null
+                  ? "Subiendo, porcentaje desconocido"
+                  : uploadPercent >= 100
+                    ? "Finalizando en el servidor"
+                    : `Subiendo, ${uploadPercent} por ciento`
+              }
+            >
+              <div
+                className={[
+                  "hf-admin-dropzone__progress-fill",
+                  uploadPercent === null ? "is-indeterminate" : ""
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                style={
+                  uploadPercent === null
+                    ? undefined
+                    : { width: `${Math.max(0, Math.min(100, uploadPercent))}%` }
+                }
+              />
+            </div>
+            <div className="hf-admin-dropzone__progress-meta">
+              <span className="hf-admin-dropzone__progress-label">
+                {uploadPercent === null
+                  ? "Subiendo…"
+                  : uploadPercent < 100
+                    ? `Subiendo… ${uploadPercent} %`
+                    : "Finalizando en el servidor…"}
+              </span>
+              {uploadName !== null && uploadName !== "" ? (
+                <span className="hf-admin-dropzone__progress-file" title={uploadName}>
+                  {uploadName}
+                </span>
+              ) : null}
+            </div>
           </div>
         ) : hasFile ? (
           <div className="hf-admin-dropzone__filled">

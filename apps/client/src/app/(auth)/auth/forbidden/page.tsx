@@ -19,6 +19,10 @@ export default function AuthForbiddenPage() {
         <Link href="/auth/login" style={{ color: "#93c5fd" }}>
           Otra cuenta
         </Link>
+        {" · "}
+        <Link href="/auth/admin/login?next=%2Fadmin" style={{ color: "#93c5fd" }}>
+          Login backoffice
+        </Link>
       </p>
     </FamilySectionLayout>
   );

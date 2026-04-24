@@ -1,17 +1,39 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import type { FamilyLoginResponse } from "../../lib/family/auth-contracts";
 
 const REMEMBER_EMAIL_KEY = "hf_auth_remember_email";
 
-export function FamilyLoginForm() {
+function ProfileGlyph() {
+  return (
+    <svg aria-hidden fill="none" height="28" viewBox="0 0 24 24" width="28">
+      <circle cx="9" cy="8" r="3" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M3 20v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.5"
+      />
+      <circle cx="17" cy="9" r="2.25" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M21 20v-0.5a3.5 3.5 0 0 0-3.5-3.5h-1"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.5"
+      />
+    </svg>
+  );
+}
+
+export function AdminLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextRaw = searchParams.get("next");
   const nextPath =
-    nextRaw !== null && nextRaw.startsWith("/") && !nextRaw.startsWith("//") ? nextRaw : "/";
+    nextRaw !== null && nextRaw.startsWith("/") && !nextRaw.startsWith("//") ? nextRaw : "/admin";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -27,7 +49,7 @@ export function FamilyLoginForm() {
         setRemember(true);
       }
     } catch {
-      // ignore
+      /* ignore */
     }
   }, []);
 
@@ -56,6 +78,13 @@ export function FamilyLoginForm() {
         return;
       }
 
+      if (data.user.role !== "admin") {
+        await fetch("/api/family/auth/logout", { method: "POST", credentials: "include" });
+        setError("Esta entrada es solo para cuentas administradoras.");
+        setPending(false);
+        return;
+      }
+
       try {
         if (remember) {
           localStorage.setItem(REMEMBER_EMAIL_KEY, email.trim());
@@ -63,7 +92,7 @@ export function FamilyLoginForm() {
           localStorage.removeItem(REMEMBER_EMAIL_KEY);
         }
       } catch {
-        // ignore
+        /* ignore */
       }
 
       setPending(false);
@@ -83,44 +112,43 @@ export function FamilyLoginForm() {
   };
 
   return (
-    <div className="hf-login-card hf-login-glass">
-      <div className="hf-login-card-head">
-        <h1 className="hf-login-title">Iniciar sesión</h1>
-        <p className="hf-login-subtitle">Películas, series y clips para toda la familia.</p>
+    <div className="hf-bo-form-inner">
+      <div aria-hidden className="hf-bo-profile-ring">
+        <ProfileGlyph />
       </div>
 
-      <form className="hf-login-form" onSubmit={onSubmit}>
-        <div className="hf-login-field">
-          <label className="hf-login-sr-only" htmlFor="hf-login-email">
-            Correo electrónico
+      <form className="hf-bo-form" onSubmit={onSubmit}>
+        <div className="hf-bo-field">
+          <label className="hf-login-sr-only" htmlFor="hf-bo-email">
+            Correo (usuario)
           </label>
           <input
-            autoComplete="email"
-            className="hf-login-input"
-            id="hf-login-email"
+            autoComplete="username"
+            className="hf-bo-input"
+            id="hf-bo-email"
             name="email"
             onChange={(e) => {
               setEmail(e.target.value);
             }}
-            placeholder="Correo electrónico"
+            placeholder="Username"
             required
             type="email"
             value={email}
           />
         </div>
-        <div className="hf-login-field">
-          <label className="hf-login-sr-only" htmlFor="hf-login-password">
+        <div className="hf-bo-field">
+          <label className="hf-login-sr-only" htmlFor="hf-bo-password">
             Contraseña
           </label>
           <input
             autoComplete="current-password"
-            className="hf-login-input"
-            id="hf-login-password"
+            className="hf-bo-input"
+            id="hf-bo-password"
             name="password"
             onChange={(e) => {
               setPassword(e.target.value);
             }}
-            placeholder="Contraseña"
+            placeholder="Password"
             required
             type="password"
             value={password}
@@ -128,48 +156,34 @@ export function FamilyLoginForm() {
         </div>
 
         {error !== null ? (
-          <p className="hf-login-error" role="alert">
+          <p className="hf-bo-error" role="alert">
             {error}
           </p>
         ) : null}
 
-        <button className="hf-login-submit" disabled={pending} type="submit">
-          {pending ? "Entrando…" : "Iniciar sesión"}
+        <button className="hf-bo-submit" disabled={pending} type="submit">
+          {pending ? "…" : "Log in"}
         </button>
 
-        <div className="hf-login-row">
-          <label className="hf-login-remember">
+        <div className="hf-bo-row">
+          <label className="hf-bo-remember">
             <input
               checked={remember}
-              className="hf-login-checkbox"
+              className="hf-bo-checkbox"
               onChange={(e) => {
                 setRemember(e.target.checked);
               }}
               type="checkbox"
             />
-            <span>Recordarme</span>
+            <span>Remember me</span>
           </label>
-          <a className="hf-login-help-link" href="#ayuda">
-            ¿Necesitas ayuda?
-          </a>
         </div>
       </form>
 
-      <div className="hf-login-extra">
-        <p className="hf-login-new">
-          <span className="hf-login-new-muted">¿Nuevo en HomeFlix?</span>{" "}
-          <span className="hf-login-new-strong">Pide acceso al administrador de tu hogar.</span>
-        </p>
-        <p className="hf-login-admin-portal">
-          <a className="hf-login-admin-portal-link" href="/auth/admin/login?next=%2Fadmin">
-            Acceso administradores · panel interno
-          </a>
-        </p>
-        <p className="hf-login-recaptcha">
-          Esta página puede estar protegida por medidas anti-abuso en el servidor.{" "}
-          <span className="hf-login-recaptcha-faux">Más información</span>
-        </p>
-      </div>
+      <p className="hf-bo-footnote">
+        ¿Solo quieres ver contenido?{" "}
+        <Link href={`/auth/login?next=${encodeURIComponent("/")}`}>Acceso familiar</Link>
+      </p>
     </div>
   );
 }
