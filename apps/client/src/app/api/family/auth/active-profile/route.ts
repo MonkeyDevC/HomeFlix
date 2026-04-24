@@ -52,7 +52,7 @@ export async function POST(request: Request) {
         avatarKey: profile.avatarKey
       }
     });
-    res.cookies.set(FAMILY_PROFILE_COOKIE, token, familyAuthCookieOptions());
+    res.cookies.set(FAMILY_PROFILE_COOKIE, token, familyAuthCookieOptions(request));
     return res;
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown_error";
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
   const session = await getFamilySession();
 
   if (session === null) {
@@ -68,6 +68,6 @@ export async function DELETE() {
   }
 
   const res = NextResponse.json({ ok: true });
-  res.cookies.set(FAMILY_PROFILE_COOKIE, "", clearedFamilyCookieOptions());
+  res.cookies.set(FAMILY_PROFILE_COOKIE, "", clearedFamilyCookieOptions(request));
   return res;
 }

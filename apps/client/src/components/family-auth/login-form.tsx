@@ -70,12 +70,15 @@ export function FamilyLoginForm() {
 
       if (data.profiles.length === 0) {
         router.push("/auth/no-profiles");
-        router.refresh();
         return;
       }
 
-      router.push(`/auth/select-profile?next=${encodeURIComponent(nextPath)}`);
-      router.refresh();
+      if (data.mustSelectProfile) {
+        router.push(`/auth/select-profile?next=${encodeURIComponent(nextPath)}`);
+        return;
+      }
+
+      router.push(nextPath);
     })();
   };
 

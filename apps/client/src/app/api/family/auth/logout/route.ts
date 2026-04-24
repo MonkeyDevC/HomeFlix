@@ -4,9 +4,9 @@ import { FAMILY_PROFILE_COOKIE, FAMILY_SESSION_COOKIE } from "../../../../../lib
 
 export const runtime = "nodejs";
 
-export async function POST() {
+export async function POST(request: Request) {
   const res = NextResponse.json({ ok: true });
-  const clear = clearedFamilyCookieOptions();
+  const clear = clearedFamilyCookieOptions(request);
   res.cookies.set(FAMILY_SESSION_COOKIE, "", clear);
   res.cookies.set(FAMILY_PROFILE_COOKIE, "", clear);
   return res;

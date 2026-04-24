@@ -83,9 +83,9 @@ export async function POST(request: Request) {
       mustSelectProfile: profiles.length > 0
     } satisfies FamilyLoginResponse);
 
-    const opts = familyAuthCookieOptions();
+    const opts = familyAuthCookieOptions(request);
     res.cookies.set(FAMILY_SESSION_COOKIE, token, opts);
-    res.cookies.set(FAMILY_PROFILE_COOKIE, "", clearedFamilyCookieOptions());
+    res.cookies.set(FAMILY_PROFILE_COOKIE, "", clearedFamilyCookieOptions(request));
 
     return res;
   } catch (error) {
