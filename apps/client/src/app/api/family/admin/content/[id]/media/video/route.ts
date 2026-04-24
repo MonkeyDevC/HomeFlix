@@ -84,7 +84,7 @@ export async function POST(
     return NextResponse.json(
       {
         error: "invalid_form_data",
-        message: "No se pudo leer el formulario. Verifica que el archivo no supere 300 MiB y vuelve a intentarlo."
+        message: "No se pudo leer el formulario. Verifica que el archivo no supere 5 GiB y vuelve a intentarlo."
       },
       { status: 400 }
     );

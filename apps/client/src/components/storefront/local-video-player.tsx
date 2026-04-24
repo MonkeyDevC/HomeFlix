@@ -1,6 +1,10 @@
 "use client";
 
 import { useMemo, useState, type SyntheticEvent } from "react";
+import {
+  FAMILY_MOV_PLAYBACK_COMPAT_HINT,
+  isFamilyQuickTimeMime
+} from "../../lib/family/allowed-video-upload";
 import type { LocalPlaybackDto } from "../../lib/family/domain-shapes";
 import { usePlaybackProgress } from "./use-playback-progress";
 
@@ -70,7 +74,13 @@ export function LocalVideoPlayer({
     const element = event.currentTarget;
     const detail = describeMediaError(element.error);
     const codecHint = playback.codec !== null ? ` Códec del archivo: ${playback.codec}.` : "";
-    setPlaybackError(`${detail}${codecHint}`);
+    const code = element.error?.code;
+    const movExtra =
+      isFamilyQuickTimeMime(playback.mimeType) &&
+      (code === MediaError.MEDIA_ERR_DECODE || code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED)
+        ? ` ${FAMILY_MOV_PLAYBACK_COMPAT_HINT}`
+        : "";
+    setPlaybackError(`${detail}${codecHint}${movExtra}`);
   }
 
   return (
@@ -78,6 +88,12 @@ export function LocalVideoPlayer({
       {incompatibleCodecWarning !== null ? (
         <p className="sf-playback-hint sf-playback-hint--warn" role="note">
           {incompatibleCodecWarning}
+        </p>
+      ) : null}
+
+      {isFamilyQuickTimeMime(playback.mimeType) ? (
+        <p className="sf-playback-hint sf-playback-hint--note" role="note">
+          {FAMILY_MOV_PLAYBACK_COMPAT_HINT}
         </p>
       ) : null}
 
@@ -97,7 +113,7 @@ export function LocalVideoPlayer({
         style={{ background: "#020617", borderRadius: "10px", maxHeight: "62vh", width: "100%" }}
       >
         <source src={playback.filePath} type={playback.mimeType ?? "video/mp4"} />
-        Tu navegador no soporta reproducción HTML5 de video.
+        Tu navegador no puede reproducir este formato en HTML5.
       </video>
 
       {playbackError !== null ? (

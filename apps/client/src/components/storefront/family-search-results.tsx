@@ -61,13 +61,13 @@ export function FamilySearchResults({
               {popular.map((item) => (
                 <li key={`popular-${item.id}`}>
                   <Link className="sf-search-popular-item" href={cardHref(item)}>
-                    {item.posterPath ?? item.thumbnailPath ? (
+                    {item.thumbnailPath ?? item.posterPath ? (
                       <img
                         alt=""
                         aria-hidden="true"
                         className="sf-search-popular-thumb"
                         loading="eager"
-                        src={item.posterPath ?? item.thumbnailPath ?? undefined}
+                        src={item.thumbnailPath ?? item.posterPath ?? undefined}
                       />
                     ) : (
                       <span aria-hidden="true" className="sf-search-popular-thumb sf-search-popular-thumb--fallback">

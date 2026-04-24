@@ -2,8 +2,11 @@
 
 import { useEffect, useRef, useState, type DragEvent, type MutableRefObject } from "react";
 import type { AdminContentMediaSummaryDto } from "../../lib/family/admin-contracts";
+import { FAMILY_VIDEO_FILE_ACCEPT, FAMILY_VIDEO_FORMAT_LABEL } from "../../lib/family/allowed-video-upload";
+import { validateClientImageUploadRules, validateImageFileForIntent } from "../../lib/admin/image-validation";
 import { adminParseJson } from "../../lib/family/admin-json";
 import { IconFilm, IconSpinner } from "./admin-nav-icons";
+import { ImageReviewCard } from "./image-review-card";
 
 type DropzoneKind = "video" | "poster" | "thumbnail";
 
@@ -19,6 +22,8 @@ type Props = Readonly<{
   codec?: string | null;
   onUploaded: (summary: AdminContentMediaSummaryDto) => void;
   disabledReason?: string | null;
+  /** Solo poster/thumbnail: aviso de revisión para el paso Media del asistente. */
+  onImageReviewGate?: (canProceed: boolean) => void;
 }>;
 
 /** Códecs que el navegador decodifica de forma confiable. Fuera de aquí:
@@ -26,7 +31,7 @@ type Props = Readonly<{
 const BROWSER_FRIENDLY_CODECS = new Set(["h264", "avc1", "vp8", "vp9"]);
 
 const ACCEPT_MAP: Record<DropzoneKind, string> = {
-  video: "video/mp4,.mp4",
+  video: FAMILY_VIDEO_FILE_ACCEPT,
   poster: "image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp",
   thumbnail: "image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
 };
@@ -38,7 +43,7 @@ const LABEL_MAP: Record<DropzoneKind, string> = {
 };
 
 const HINT_MAP: Record<DropzoneKind, string> = {
-  video: "MP4 hasta 300 MiB · se convierte a H.264 en el servidor si hace falta (sin pérdida visible)",
+  video: `${FAMILY_VIDEO_FORMAT_LABEL} · máx. 5 GiB · H.264 en servidor si hace falta (sin pérdida visible)`,
   poster: "JPG / PNG / WebP · máx. 10 MiB",
   thumbnail: "JPG / PNG / WebP · máx. 10 MiB"
 };
@@ -137,7 +142,8 @@ export function MediaDropzoneCard({
   qualityLabel,
   codec,
   onUploaded,
-  disabledReason
+  disabledReason,
+  onImageReviewGate
 }: Props) {
   const [busy, setBusy] = useState(false);
   /** 0–100 durante subida; `null` = progreso no computable en este navegador. */
@@ -194,6 +200,22 @@ export function MediaDropzoneCard({
     if (contentId === null) {
       setError(disabledReason ?? "Guarda primero el borrador para subir archivos.");
       return;
+    }
+    if (kind === "poster" || kind === "thumbnail") {
+      const rules = validateClientImageUploadRules(file);
+      if (!rules.ok) {
+        setError(rules.message);
+        return;
+      }
+      const pre = await validateImageFileForIntent(kind, file);
+      if ("error" in pre) {
+        setError(pre.error);
+        return;
+      }
+      if (!pre.isValid) {
+        setError(pre.warnings[0] ?? "La imagen no cumple el mínimo para este uso.");
+        return;
+      }
     }
     setBusy(true);
     setError(null);
@@ -265,33 +287,37 @@ export function MediaDropzoneCard({
   const hasFile = currentPath !== null;
   const filename = filenameFromPath(currentPath);
 
+  const showImageReview =
+    kind !== "video" && currentPath !== null && onImageReviewGate !== undefined;
+
   return (
-    <div
-      className={[
-        "hf-admin-dropzone",
-        `hf-admin-dropzone--${variant}`,
-        `hf-admin-dropzone--${kind}`,
-        dragActive ? "is-drag" : "",
-        hasFile ? "is-filled" : "",
-        disabled ? "is-disabled" : "",
-        busy ? "is-busy" : ""
-      ]
-        .filter(Boolean)
-        .join(" ")}
-      onDrop={onDrop}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      role="button"
-      tabIndex={disabled ? -1 : 0}
-      aria-disabled={disabled}
-      onClick={onPick}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onPick();
-        }
-      }}
-    >
+    <div className="hf-admin-dropzone-stack">
+      <div
+        className={[
+          "hf-admin-dropzone",
+          `hf-admin-dropzone--${variant}`,
+          `hf-admin-dropzone--${kind}`,
+          dragActive ? "is-drag" : "",
+          hasFile ? "is-filled" : "",
+          disabled ? "is-disabled" : "",
+          busy ? "is-busy" : ""
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        onDrop={onDrop}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        aria-disabled={disabled}
+        onClick={onPick}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onPick();
+          }
+        }}
+      >
       <input
         ref={inputRef}
         type="file"
@@ -411,6 +437,18 @@ export function MediaDropzoneCard({
       ) : null}
       {disabled && !busy && contentId === null && disabledReason !== null && disabledReason !== undefined ? (
         <p className="hf-admin-dropzone__disabled-hint">{disabledReason}</p>
+      ) : null}
+      </div>
+      {showImageReview ? (
+        <ImageReviewCard
+          key={`${kind}-${currentPath}`}
+          intent={kind === "poster" ? "poster" : "thumbnail"}
+          imageUrl={currentPath}
+          onReplace={() => {
+            inputRef.current?.click();
+          }}
+          onGateChange={onImageReviewGate}
+        />
       ) : null}
     </div>
   );

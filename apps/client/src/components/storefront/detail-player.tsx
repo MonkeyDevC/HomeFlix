@@ -1,7 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type SyntheticEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import {
+  FAMILY_MOV_PLAYBACK_COMPAT_HINT,
+  isFamilyQuickTimeMime
+} from "../../lib/family/allowed-video-upload";
 import type { LocalPlaybackDto } from "../../lib/family/domain-shapes";
 import { usePlaybackProgress } from "./use-playback-progress";
 
@@ -81,6 +85,24 @@ export type NextEpisodeInfo = Readonly<{
 }>;
 
 const NEXT_EP_COUNTDOWN_SECONDS = 10;
+
+function describeMediaErrorDetail(error: MediaError | null): string {
+  if (error === null) {
+    return "Error desconocido al reproducir el video.";
+  }
+  switch (error.code) {
+    case MediaError.MEDIA_ERR_ABORTED:
+      return "La reproducción fue cancelada.";
+    case MediaError.MEDIA_ERR_NETWORK:
+      return "Se perdió la conexión al servir el video.";
+    case MediaError.MEDIA_ERR_DECODE:
+      return "El navegador no pudo decodificar la pista de video (códec incompatible).";
+    case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+      return "El formato/códec del archivo no es soportado por el navegador.";
+    default:
+      return error.message || "Error desconocido al reproducir el video.";
+  }
+}
 
 /**
  * Overlay estilo Netflix: aparece cuando el episodio actual termina y
@@ -182,6 +204,7 @@ export function DetailPlayer({
   const searchParams = useSearchParams();
   const [showNextOverlay, setShowNextOverlay] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [videoError, setVideoError] = useState<string | null>(null);
   const triggeredByTimeRef = useRef<boolean>(false);
   const autoplayHandledRef = useRef<boolean>(false);
   const fullscreenHandledRef = useRef<boolean>(false);
@@ -313,7 +336,23 @@ export function DetailPlayer({
    * URL trae el flag `autoplay=1`. Luego limpia el flag de la URL para que
    * un refresh no vuelva a reproducirlo automáticamente.
    */
+  const handleVideoError = useCallback(
+    (event: SyntheticEvent<HTMLVideoElement>) => {
+      const el = event.currentTarget;
+      const detail = describeMediaErrorDetail(el.error);
+      const code = el.error?.code;
+      const movExtra =
+        isFamilyQuickTimeMime(playback.mimeType) &&
+        (code === MediaError.MEDIA_ERR_DECODE || code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED)
+          ? ` ${FAMILY_MOV_PLAYBACK_COMPAT_HINT}`
+          : "";
+      setVideoError(`${detail}${movExtra}`);
+    },
+    [playback.mimeType]
+  );
+
   const handleLoadedMetadata = useCallback(() => {
+    setVideoError(null);
     onLoadedMetadata();
 
     if (autoplayHandledRef.current) return;
@@ -406,6 +445,7 @@ export function DetailPlayer({
    */
   useEffect(() => {
     setShowNextOverlay(false);
+    setVideoError(null);
     triggeredByTimeRef.current = false;
     autoplayHandledRef.current = false;
     fullscreenHandledRef.current = false;
@@ -435,6 +475,16 @@ export function DetailPlayer({
       id="detail-player"
       ref={shellRef}
     >
+      {isFamilyQuickTimeMime(playback.mimeType) ? (
+        <p className="sf-playback-hint sf-playback-hint--note sf-detail-player-mov-hint" role="note">
+          {FAMILY_MOV_PLAYBACK_COMPAT_HINT}
+        </p>
+      ) : null}
+      {videoError !== null ? (
+        <p className="sf-playback-hint sf-playback-hint--error sf-detail-player-video-err" role="alert">
+          {videoError}
+        </p>
+      ) : null}
       <div
         className={`sf-detail-player-frame${isFullscreen ? " sf-detail-player-frame--fs" : ""}`}
       >
@@ -452,6 +502,7 @@ export function DetailPlayer({
           disablePictureInPicture
           disableRemotePlayback
           onEnded={handleEnded}
+          onError={handleVideoError}
           onLoadedMetadata={handleLoadedMetadata}
           onPause={onPause}
           onPlay={handlePlay}
@@ -462,7 +513,7 @@ export function DetailPlayer({
           ref={videoRef}
         >
           <source src={playback.filePath} type={playback.mimeType ?? "video/mp4"} />
-          Tu navegador no soporta reproducción HTML5 de video.
+          Tu navegador no puede reproducir este formato en HTML5.
         </video>
         <button
           aria-label={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"}

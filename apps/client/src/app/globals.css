@@ -3453,6 +3453,12 @@ span.sf-profiles-bar-manage--faux {
   color: #fde68a;
 }
 
+.sf-playback-hint--note {
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #bae6fd;
+}
+
 .sf-playback-hint--error {
   margin-top: 10px;
   background: rgba(220, 38, 38, 0.12);
@@ -3894,6 +3900,11 @@ span.sf-profiles-bar-manage--faux {
 }
 
 /* --- Player --- */
+
+.sf-detail-player-mov-hint,
+.sf-detail-player-video-err {
+  margin: 0 0 8px;
+}
 
 .sf-detail-player {
   width: 100%;

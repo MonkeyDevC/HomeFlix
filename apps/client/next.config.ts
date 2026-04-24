@@ -1,10 +1,19 @@
 import type { NextConfig } from "next";
 
-const MAX_UPLOAD_BODY_SIZE = "300mb";
+/** Debe coincidir con `FAMILY_VIDEO_UPLOAD_MAX_BYTES` en `admin-media-storage.ts`. */
+const FAMILY_VIDEO_UPLOAD_MAX_BYTES = 5 * 1024 * 1024 * 1024;
+/** Mismo margen relativo que antes (310/300) sobre el tope en MiB. */
+const MAX_UPLOAD_MB = Math.ceil((FAMILY_VIDEO_UPLOAD_MAX_BYTES / (1024 * 1024)) * (310 / 300));
+const MAX_UPLOAD_BODY_SIZE = `${MAX_UPLOAD_MB}mb`;
 
 const nextConfig: NextConfig = {
   experimental: {
-    proxyClientMaxBodySize: MAX_UPLOAD_BODY_SIZE
+    // Next tipa union de literales; el valor se deriva de FAMILY_VIDEO_UPLOAD_MAX_BYTES.
+    proxyClientMaxBodySize: MAX_UPLOAD_BODY_SIZE as NextConfig["experimental"] extends {
+      proxyClientMaxBodySize?: infer P;
+    }
+      ? P
+      : never
   },
   transpilePackages: ["@homeflix/contracts", "@homeflix/domain"],
   /**
