@@ -11,6 +11,10 @@ import {
   optionalPositiveInt,
   optionalTrimmedString
 } from "../../../../../../lib/server/admin/admin-validation";
+import {
+  removeStoredFileMaybe,
+  uniqueManagedPublicPaths
+} from "../../../../../../lib/server/admin/admin-media-storage";
 import { requireAdminApi } from "../../../../../../lib/server/auth/require-admin-api";
 import { getFamilyPrisma } from "../../../../../../lib/server/db";
 
@@ -298,8 +302,42 @@ export async function DELETE(
 
   try {
     const prisma = getFamilyPrisma();
-    await prisma.contentItem.delete({ where: { id } });
-    return NextResponse.json({ ok: true });
+
+    const existing = await prisma.contentItem.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        posterPath: true,
+        thumbnailPath: true,
+        mediaAssets: { select: { filePath: true } }
+      }
+    });
+
+    if (existing === null) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
+
+    const pathsToRemove = uniqueManagedPublicPaths([
+      existing.posterPath,
+      existing.thumbnailPath,
+      ...existing.mediaAssets.map((m) => m.filePath)
+    ]);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.mediaAsset.deleteMany({ where: { contentItemId: id } });
+      await tx.contentItem.delete({ where: { id } });
+    });
+
+    console.info("[homeflix:content-delete]", {
+      contentItemId: id,
+      filesPlanned: pathsToRemove.length
+    });
+
+    for (const p of pathsToRemove) {
+      await removeStoredFileMaybe(p, `content-delete:${id}`);
+    }
+
+    return NextResponse.json({ ok: true, removedFiles: pathsToRemove.length });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
       return NextResponse.json({ error: "not_found" }, { status: 404 });

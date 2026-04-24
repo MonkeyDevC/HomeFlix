@@ -6,6 +6,7 @@ import {
   inferFamilyVideoMimeType
 } from "../../family/allowed-video-upload";
 import {
+  isManagedStoragePath,
   resolveBucketDir,
   resolveStorageDiskPath,
   toPublicStoragePath,
@@ -164,15 +165,62 @@ export async function saveUploadFile(file: File, kind: MediaKind): Promise<Media
   };
 }
 
-export async function removeStoredFileMaybe(filePath: string | null | undefined): Promise<void> {
+/**
+ * Elimina un archivo bajo `FAMILY_STORAGE_ROOT` si la ruta pública es gestionada
+ * (`/storage/...`). No hace nada si la ruta escapa del root o no existe.
+ *
+ * @param logContext Si se informa, emite `console.warn` ante rutas no gestionadas,
+ *        archivos ausentes o fallos de borrado (operaciones de limpieza).
+ */
+export async function removeStoredFileMaybe(
+  filePath: string | null | undefined,
+  logContext?: string
+): Promise<void> {
   const abs = resolveStorageDiskPath(filePath);
   if (abs === null) {
+    if (
+      logContext !== undefined &&
+      filePath !== null &&
+      filePath !== undefined &&
+      String(filePath).trim() !== ""
+    ) {
+      console.warn("[homeflix:storage]", "skip_unmanaged_path", { context: logContext, filePath });
+    }
     return;
   }
   try {
     await stat(abs);
-    await rm(abs, { force: true });
   } catch {
-    // Reemplazo best-effort: no fallar el flujo si el archivo previo no existe.
+    if (logContext !== undefined) {
+      console.warn("[homeflix:storage]", "file_missing_skip", { context: logContext, filePath, abs });
+    }
+    return;
   }
+  try {
+    await rm(abs, { force: true });
+  } catch (err) {
+    if (logContext !== undefined) {
+      console.warn("[homeflix:storage]", "remove_failed", {
+        context: logContext,
+        filePath,
+        abs,
+        message: err instanceof Error ? err.message : String(err)
+      });
+    }
+  }
+}
+
+/** Rutas públicas `/storage/...` únicas y seguras para borrado en lote. */
+export function uniqueManagedPublicPaths(
+  paths: ReadonlyArray<string | null | undefined>
+): string[] {
+  const out = new Set<string>();
+  for (const p of paths) {
+    if (p === null || p === undefined) continue;
+    const t = p.trim();
+    if (t === "") continue;
+    if (!isManagedStoragePath(t)) continue;
+    out.add(t);
+  }
+  return [...out];
 }
