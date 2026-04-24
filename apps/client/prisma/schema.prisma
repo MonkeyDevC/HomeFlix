@@ -72,7 +72,7 @@ model Collection {
   @@map("collections")
 }
 
-/// Pieza editorial. Visible en catálogo solo si `editorialStatus = published` **y** existe fila en `ProfileContentAccess`.
+/// Pieza editorial. Catálogo familiar: `published` + `public_catalog` + (`visibility` hogar/abierto **o** fila en `ProfileContentAccess` si es `private`).
 model ContentItem {
   id               String   @id @default(uuid()) @db.Uuid
   slug             String   @unique
