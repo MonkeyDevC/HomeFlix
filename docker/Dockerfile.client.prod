@@ -73,7 +73,10 @@ ENV DEBIAN_FRONTEND=noninteractive \
     NODE_ENV=production \
     PORT=3000 \
     HOSTNAME=0.0.0.0 \
-    FAMILY_STORAGE_ROOT=public/storage
+    FAMILY_STORAGE_ROOT=public/storage \
+    COREPACK_HOME=/tmp/homeflix-corepack \
+    XDG_CACHE_HOME=/tmp/homeflix-xdg-cache \
+    NPM_CONFIG_CACHE=/tmp/homeflix-npm-cache
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
@@ -100,7 +103,11 @@ COPY --from=builder --chown=homeflix:homeflix /repo /repo
 RUN mkdir -p /repo/apps/client/public/storage/videos \
              /repo/apps/client/public/storage/posters \
              /repo/apps/client/public/storage/thumbnails \
- && chown -R homeflix:homeflix /repo/apps/client/public/storage
+             /tmp/homeflix-corepack /tmp/homeflix-xdg-cache /tmp/homeflix-npm-cache \
+             /repo/.cache \
+ && chown -R homeflix:homeflix /repo/apps/client/public/storage \
+             /tmp/homeflix-corepack /tmp/homeflix-xdg-cache /tmp/homeflix-npm-cache \
+             /repo/.cache
 
 COPY --chown=homeflix:homeflix docker/client-entrypoint.sh /usr/local/bin/homeflix-entrypoint
 # Si el repo se clonó en Windows, asegúrate de que el script tiene LF antes del chmod.

@@ -46,6 +46,18 @@ log "NODE_ENV=${NODE_ENV:-production}"
 log "FAMILY_STORAGE_ROOT=${FAMILY_STORAGE_ROOT:-public/storage}"
 log "PORT=${PORT:-3000} HOSTNAME=${HOSTNAME:-0.0.0.0}"
 
+# Corepack/pnpm como no-root: sin esto, Corepack intenta mkdir bajo /repo/.cache/...
+# (HOME del usuario homeflix es /repo) y puede fallar con EACCES en runtime.
+: "${COREPACK_HOME:=/tmp/homeflix-corepack}"
+: "${XDG_CACHE_HOME:=/tmp/homeflix-xdg-cache}"
+: "${NPM_CONFIG_CACHE:=/tmp/homeflix-npm-cache}"
+export COREPACK_HOME XDG_CACHE_HOME NPM_CONFIG_CACHE
+mkdir -p "$COREPACK_HOME" "$XDG_CACHE_HOME" "$NPM_CONFIG_CACHE" || {
+  log "ERROR: no se pudieron crear directorios de caché (COREPACK_HOME, etc.)."
+  exit 1
+}
+log "COREPACK_HOME=${COREPACK_HOME} XDG_CACHE_HOME=${XDG_CACHE_HOME}"
+
 # ---------------------------------------------------------------------------
 # 2. Migraciones Prisma (idempotente).
 # ---------------------------------------------------------------------------
