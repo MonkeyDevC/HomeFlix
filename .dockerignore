@@ -43,6 +43,9 @@ apps/api
 apps/cms
 
 # ----- Documentación y scripts que no hacen falta en runtime -----
+# Solo rutas en la raíz (`docs/`, `scripts/*.mjs` listados abajo).
+# NO excluye `apps/client/scripts/` (p. ej. audit-storage-orphans.ts) ni
+# `apps/client/src/**` (rutas API, admin-media-storage, etc.).
 docs
 *.md
 !README.md
@@ -60,6 +63,7 @@ terminals
 pnpm-debug.log*
 
 # ----- Media subida: SIEMPRE por volumen, nunca por build -----
+# No confundir con el código fuente: esto es solo public/storage (binarios).
 apps/client/public/storage
 
 # ----- Prisma client generado (se regenera en build) -----
