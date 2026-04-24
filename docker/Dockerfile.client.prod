@@ -45,7 +45,8 @@ RUN apt-get update \
  && corepack prepare pnpm@10.33.0 --activate
 
 # Primero el lockfile y manifiestos para cachear `pnpm install`.
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# `tsconfig.base.json` vive en la raíz del monorepo: los packages lo extienden vía ../../tsconfig.base.json
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY packages ./packages
 COPY apps/client ./apps/client
 
@@ -53,9 +54,10 @@ COPY apps/client ./apps/client
 # pnpm usa lockfile; lo dejamos explícito para que no se quede pillado.
 RUN pnpm install --frozen-lockfile --prefer-offline
 
-# Builds dependientes: primero packages de workspace (contracts/domain), luego Next.
-RUN pnpm --filter @homeflix/contracts build \
+# Orden de build según dependencias del workspace: types → domain → contracts → client.
+RUN pnpm --filter @homeflix/types build \
  && pnpm --filter @homeflix/domain build \
+ && pnpm --filter @homeflix/contracts build \
  && pnpm --filter @homeflix/client build
 
 

@@ -6,6 +6,8 @@
 
 SSOT oficial: `docs/family-v1/` (especialmente `00-SSOT.md` y `README.md` de esa carpeta).
 
+**Despliegue en VPS (Docker + Nginx):** `docs/deploy-production.md` (levantar stack, health, logs, bootstrap admin, backups).
+
 ---
 
 ## Stack activo Family V1
@@ -66,18 +68,17 @@ Notas:
 - Prisma migra sobre el schema `family_v1`.
 - En pgAdmin revisa tablas en `homeflix > Schemas > family_v1 > Tables` (no en `public`).
 
-## Seed de Family V1 (admin + perfiles)
+## Seed de Family V1 (solo desarrollo local)
 
-Script: `apps/client/prisma/seed.ts`
+Script: `apps/client/prisma/seed.ts` — pensado para **entorno local**, no como flujo de producción.
 
-Credenciales seed actuales:
+- Por defecto crea/actualiza `admin@family.local` con contraseña demo (solo dev).
+- Puedes fijar credenciales sin tocar código: `HOMEFLIX_SEED_ADMIN_EMAIL`, `HOMEFLIX_SEED_ADMIN_PASSWORD`.
+- El script **no imprime** la contraseña en consola.
 
-- Email: `admin@family.local`
-- Password: `familydev1`
-- Role: `admin`
-- Perfiles por defecto: `Principal`, `Niños`
+**Producción (VPS):** crear el primer admin con bootstrap explícito y variables de entorno (no corre en el arranque del contenedor). Ver `docs/deploy-production.md` y el script `apps/client/prisma/bootstrap-admin.ts` (`pnpm run bootstrap:admin` dentro de `apps/client` con `DATABASE_URL` + `HOMEFLIX_BOOTSTRAP_ADMIN_*`).
 
-Ejecución:
+Ejecución local del seed:
 
 ```bash
 corepack pnpm --filter @homeflix/client exec tsx prisma/seed.ts

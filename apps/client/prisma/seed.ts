@@ -1,6 +1,9 @@
 /**
- * Usuario demo Family V1 (desarrollo).
+ * Usuario demo Family V1 (desarrollo local).
  * Ejecutar desde apps/client: `pnpm exec prisma db seed`
+ *
+ * En producción/VPS no uses este seed como flujo principal: usa
+ * `pnpm bootstrap:admin` con `HOMEFLIX_BOOTSTRAP_ADMIN_*` (ver docs/deploy-production.md).
  */
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
@@ -16,8 +19,9 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: databaseUrl.trim() })
 });
 
-const DEMO_EMAIL = "admin@family.local";
-const DEMO_PASSWORD = "familydev1";
+const seedEmailRaw = process.env.HOMEFLIX_SEED_ADMIN_EMAIL?.trim() ?? "";
+const DEMO_EMAIL = (seedEmailRaw.length > 0 ? seedEmailRaw : "admin@family.local").toLowerCase();
+const DEMO_PASSWORD = process.env.HOMEFLIX_SEED_ADMIN_PASSWORD ?? "familydev1";
 
 async function main(): Promise<void> {
   const hash = bcrypt.hashSync(DEMO_PASSWORD, 10);
@@ -54,7 +58,10 @@ async function main(): Promise<void> {
   }
 
   // eslint-disable-next-line no-console -- script
-  console.log(`Family seed OK · ${DEMO_EMAIL} / ${DEMO_PASSWORD} · rol admin · perfiles por defecto si faltaban.`);
+  console.log(
+    `Family seed OK · ${DEMO_EMAIL} · rol admin · perfiles por defecto si faltaban. ` +
+      `(contraseña no se muestra; en local por defecto sigue siendo la demo salvo HOMEFLIX_SEED_ADMIN_PASSWORD.)`
+  );
 }
 
 void main()
