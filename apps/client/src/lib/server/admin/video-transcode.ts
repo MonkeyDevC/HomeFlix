@@ -18,7 +18,7 @@
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { existsSync } from "node:fs";
-import { rename, unlink } from "node:fs/promises";
+import { rename, stat, unlink } from "node:fs/promises";
 import path from "node:path";
 
 /**
@@ -108,7 +108,9 @@ async function runFfmpeg(
         return;
       }
       const stderr = Buffer.concat(errChunks).toString("utf8").trim();
-      reject(new Error(`ffmpeg exited with code ${code}: ${stderr.slice(-400) || "(no stderr)"}`));
+      const tail = stderr.slice(-400) || "(no stderr)";
+      console.error("[homeflix:ffmpeg]", "exit_error", { code, stderrTail: tail });
+      reject(new Error(`ffmpeg exited with code ${code}: ${tail}`));
     });
   });
 }
@@ -166,6 +168,119 @@ export async function transcodeToH264InPlace(
 
   await unlink(diskPath);
   await rename(tempOutput, diskPath);
+}
+
+/**
+ * Convierte un `.mov` (QuickTime) a `.mp4` H.264/AAC en el mismo directorio.
+ * El `.mov` de entrada se elimina; el resultado es siempre contenedor MP4
+ * (no se sirven `.mov` al navegador).
+ *
+ * Si `diskPath` no termina en `.mov`, no hace nada y devuelve el mismo path.
+ */
+export async function convertMovToMp4OnDisk(
+  diskPath: string,
+  onProgress?: TranscodeProgress
+): Promise<{ diskPath: string; replaced: boolean }> {
+  const ext = path.extname(diskPath).toLowerCase();
+  if (ext !== ".mov") {
+    return { diskPath, replaced: false };
+  }
+
+  const dir = path.dirname(diskPath);
+  const base = path.basename(diskPath, ext);
+  const tempOutput = path.join(dir, `${base}.transcoding.mp4`);
+  const finalOutput = path.join(dir, `${base}.mp4`);
+
+  if (existsSync(tempOutput)) {
+    try {
+      await unlink(tempOutput);
+    } catch {
+      /* ignorable */
+    }
+  }
+  if (existsSync(finalOutput)) {
+    try {
+      await unlink(finalOutput);
+    } catch {
+      /* ignorable */
+    }
+  }
+
+  const args = [
+    "-y",
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-stats",
+    "-i",
+    diskPath,
+    "-c:v",
+    "libx264",
+    "-preset",
+    "slow",
+    "-crf",
+    "18",
+    "-pix_fmt",
+    "yuv420p",
+    "-c:a",
+    "aac",
+    "-b:a",
+    "192k",
+    "-movflags",
+    "+faststart",
+    tempOutput
+  ];
+
+  console.info("[homeflix:ffmpeg]", "mov_to_mp4_start", { input: path.basename(diskPath) });
+
+  try {
+    await runFfmpeg(args, onProgress);
+  } catch (err) {
+    console.error("[homeflix:ffmpeg]", "mov_to_mp4_failed", {
+      input: path.basename(diskPath),
+      message: err instanceof Error ? err.message : String(err)
+    });
+    try {
+      await unlink(tempOutput);
+    } catch {
+      /* ignorable */
+    }
+    throw err;
+  }
+
+  try {
+    await unlink(diskPath);
+  } catch (err) {
+    console.error("[homeflix:ffmpeg]", "mov_to_mp4_remove_input_failed", {
+      input: path.basename(diskPath),
+      message: err instanceof Error ? err.message : String(err)
+    });
+    try {
+      await unlink(tempOutput);
+    } catch {
+      /* ignorable */
+    }
+    throw err;
+  }
+
+  await rename(tempOutput, finalOutput);
+
+  try {
+    const st = await stat(finalOutput);
+    if (st.size <= 0) {
+      throw new Error("El archivo MP4 generado está vacío.");
+    }
+  } catch (err) {
+    console.error("[homeflix:ffmpeg]", "mov_to_mp4_stat_failed", {
+      output: path.basename(finalOutput),
+      message: err instanceof Error ? err.message : String(err)
+    });
+    throw err;
+  }
+
+  console.info("[homeflix:ffmpeg]", "mov_to_mp4_done", { output: path.basename(finalOutput) });
+
+  return { diskPath: finalOutput, replaced: true };
 }
 
 /**

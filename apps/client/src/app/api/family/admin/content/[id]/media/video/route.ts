@@ -14,6 +14,7 @@ import {
   probeVideo
 } from "../../../../../../../../lib/server/admin/video-probe";
 import {
+  convertMovToMp4OnDisk,
   extractPosterFrame,
   transcodeToH264InPlace
 } from "../../../../../../../../lib/server/admin/video-transcode";
@@ -96,6 +97,12 @@ export async function POST(
   }
   const validation = validateUploadFile(candidate, "video");
   if (!validation.ok) {
+    console.warn("[homeflix:video-upload]", "validation_rejected", {
+      code: validation.code,
+      message: validation.message,
+      name: candidate.name,
+      type: candidate.type
+    });
     return NextResponse.json(
       { error: validation.code, message: validation.message },
       { status: 400 }
@@ -105,6 +112,38 @@ export async function POST(
   let saved: Awaited<ReturnType<typeof saveUploadFile>> | null = null;
   try {
     saved = await saveUploadFile(candidate, "video");
+
+    if (path.extname(saved.diskPath).toLowerCase() === ".mov") {
+      console.info("[homeflix:video-upload]", "mov_normalize_start", {
+        publicPath: saved.publicPath
+      });
+      try {
+        const { diskPath: mp4Disk } = await convertMovToMp4OnDisk(saved.diskPath);
+        const st = await stat(mp4Disk);
+        const baseName = path.basename(mp4Disk);
+        saved = {
+          ...saved,
+          diskPath: mp4Disk,
+          publicPath: toPublicStoragePath("videos", baseName),
+          mimeType: "video/mp4",
+          sizeBytes: Number(st.size)
+        };
+      } catch (movErr) {
+        await removeStoredFileMaybe(saved.publicPath);
+        const message = movErr instanceof Error ? movErr.message : "mov_to_mp4_failed";
+        console.error("[homeflix:video-upload]", "mov_normalize_failed", {
+          publicPath: saved.publicPath,
+          message
+        });
+        return NextResponse.json(
+          {
+            error: "mov_to_mp4_failed",
+            message: `No se pudo convertir MOV a MP4: ${message}`
+          },
+          { status: 500 }
+        );
+      }
+    }
 
     // Inspección de metadatos: solo rechazamos si el archivo no es un video
     // legible. Si lo es, capturamos codec/res/fps/duración para decidir si
@@ -127,10 +166,18 @@ export async function POST(
     // reproduzca en cualquier dispositivo familiar.
     if (!isBrowserFriendlyCodec(metadata.codec)) {
       try {
+        console.info("[homeflix:video-upload]", "h264_transcode_start", {
+          publicPath: saved.publicPath,
+          codec: metadata.codec
+        });
         await transcodeToH264InPlace(saved.diskPath);
       } catch (transcodeErr) {
         await removeStoredFileMaybe(saved.publicPath);
         const message = transcodeErr instanceof Error ? transcodeErr.message : "transcode_failed";
+        console.error("[homeflix:video-upload]", "h264_transcode_failed", {
+          publicPath: saved.publicPath,
+          message
+        });
         return NextResponse.json(
           {
             error: "transcode_failed",

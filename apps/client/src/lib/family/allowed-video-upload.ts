@@ -3,13 +3,18 @@
  * Única lista de referencia para MIME/extensiones y textos de ayuda.
  */
 
-export const FAMILY_ALLOWED_VIDEO_MIME_TYPES = ["video/mp4", "video/quicktime"] as const;
+export const FAMILY_ALLOWED_VIDEO_MIME_TYPES = [
+  "video/mp4",
+  "video/quicktime",
+  "video/x-quicktime",
+  "video/x-mov"
+] as const;
 
 export const FAMILY_ALLOWED_VIDEO_EXTENSIONS = [".mp4", ".mov"] as const;
 
 /** Valor del atributo `accept` en inputs de archivo de video. */
 export const FAMILY_VIDEO_FILE_ACCEPT =
-  "video/mp4,video/quicktime,.mp4,.mov" as const;
+  "video/mp4,video/quicktime,video/x-quicktime,.mp4,.mov" as const;
 
 /** Texto corto para hints de UI (admin). */
 export const FAMILY_VIDEO_FORMAT_LABEL = "MP4 / MOV" as const;
@@ -20,7 +25,10 @@ export const FAMILY_MOV_PLAYBACK_COMPAT_HINT =
 
 const VIDEO_MIME_TO_EXT: Readonly<Record<string, readonly string[]>> = {
   "video/mp4": [".mp4"],
-  "video/quicktime": [".mov"]
+  "video/quicktime": [".mov"],
+  /** Algunos user-agents envían esto en lugar de `video/quicktime`. */
+  "video/x-quicktime": [".mov"],
+  "video/x-mov": [".mov"]
 };
 
 export function familyVideoMimeToExtMap(): Readonly<Record<string, readonly string[]>> {
@@ -32,13 +40,14 @@ export function familyVideoMimeToExtMap(): Readonly<Record<string, readonly stri
  * `octet-stream` aunque la extensión sea .mov / .mp4.
  */
 export function isFamilyQuickTimeMime(mime: string | null | undefined): boolean {
-  return mime?.toLowerCase().trim() === "video/quicktime";
+  const m = mime?.toLowerCase().trim() ?? "";
+  return m === "video/quicktime" || m === "video/x-quicktime" || m === "video/x-mov";
 }
 
 export function inferFamilyVideoMimeType(fileType: string, normalizedExt: string): string {
   const m = fileType.toLowerCase().trim();
-  if (m === "video/mp4" || m === "video/quicktime") {
-    return m;
+  if (m === "video/mp4" || m === "video/quicktime" || m === "video/x-quicktime" || m === "video/x-mov") {
+    return m === "video/mp4" ? "video/mp4" : "video/quicktime";
   }
   if (m === "" || m === "application/octet-stream" || m === "binary/octet-stream") {
     if (normalizedExt === ".mov") return "video/quicktime";

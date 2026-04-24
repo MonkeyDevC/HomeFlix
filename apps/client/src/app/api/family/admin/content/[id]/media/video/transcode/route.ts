@@ -21,6 +21,7 @@ import {
   probeVideo
 } from "../../../../../../../../../lib/server/admin/video-probe";
 import {
+  convertMovToMp4OnDisk,
   extractPosterFrame,
   transcodeToH264InPlace
 } from "../../../../../../../../../lib/server/admin/video-transcode";
@@ -89,12 +90,35 @@ export async function POST(
     );
   }
 
-  const diskPath = resolveStorageDiskPath(asset.filePath);
+  let diskPath = resolveStorageDiskPath(asset.filePath);
   if (diskPath === null) {
     return NextResponse.json(
       { error: "invalid_path", message: "La ruta del archivo no es válida para transcode." },
       { status: 422 }
     );
+  }
+
+  let effectivePublicPath = asset.filePath;
+  let transcoded = false;
+
+  if (path.extname(diskPath).toLowerCase() === ".mov") {
+    console.info("[homeflix:video-transcode]", "mov_normalize_start", { filePath: asset.filePath });
+    try {
+      const { diskPath: mp4Disk } = await convertMovToMp4OnDisk(diskPath);
+      diskPath = mp4Disk;
+      effectivePublicPath = toPublicStoragePath("videos", path.basename(mp4Disk));
+      transcoded = true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "mov_to_mp4_failed";
+      console.error("[homeflix:video-transcode]", "mov_normalize_failed", {
+        filePath: asset.filePath,
+        message
+      });
+      return NextResponse.json(
+        { error: "mov_to_mp4_failed", message: `No se pudo convertir MOV a MP4: ${message}` },
+        { status: 500 }
+      );
+    }
   }
 
   // Primer probe: leer el estado actual del archivo en disco (la BD puede
@@ -107,13 +131,20 @@ export async function POST(
     );
   }
 
-  let transcoded = false;
   if (!isBrowserFriendlyCodec(initialProbe.metadata.codec)) {
     try {
+      console.info("[homeflix:video-transcode]", "h264_transcode_start", {
+        filePath: effectivePublicPath,
+        codec: initialProbe.metadata.codec
+      });
       await transcodeToH264InPlace(diskPath);
       transcoded = true;
     } catch (err) {
       const message = err instanceof Error ? err.message : "transcode_failed";
+      console.error("[homeflix:video-transcode]", "h264_transcode_failed", {
+        filePath: effectivePublicPath,
+        message
+      });
       return NextResponse.json({ error: "transcode_failed", message }, { status: 500 });
     }
   }
@@ -130,9 +161,14 @@ export async function POST(
     /* keep previous sizeBytes */
   }
 
+  const finalMimeType =
+    path.extname(effectivePublicPath).toLowerCase() === ".mp4" ? "video/mp4" : asset.mimeType;
+
   const updated = await prisma.mediaAsset.update({
     where: { id: asset.id },
     data: {
+      filePath: effectivePublicPath,
+      mimeType: finalMimeType,
       sizeBytes,
       width: metadata?.width ?? asset.width,
       height: metadata?.height ?? asset.height,

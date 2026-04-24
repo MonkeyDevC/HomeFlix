@@ -101,6 +101,13 @@ export function validateUploadFile(
 
   const allowedExt = rule.allowedMimeToExt[mime];
   if (allowedExt === undefined) {
+    if (kind === "video") {
+      console.warn("[homeflix:media-upload]", "invalid_mime", {
+        mime: mime || "(vacío)",
+        ext,
+        declaredType: file.type
+      });
+    }
     return {
       ok: false,
       code: "invalid_mime",
@@ -112,6 +119,13 @@ export function validateUploadFile(
   }
 
   if (!allowedExt.includes(ext)) {
+    if (kind === "video") {
+      console.warn("[homeflix:media-upload]", "invalid_extension", {
+        ext: ext || "(sin extensión)",
+        mime,
+        declaredType: file.type
+      });
+    }
     return {
       ok: false,
       code: "invalid_extension",
