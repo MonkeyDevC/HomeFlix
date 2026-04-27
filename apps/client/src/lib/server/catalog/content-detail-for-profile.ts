@@ -1,9 +1,11 @@
 import { stat } from "node:fs/promises";
 import type { Prisma } from "../../../generated/prisma-family/client";
+import { familyGalleryPublicPhotoUrl } from "../../family/photo-constants";
 import type {
   ContentDetailForProfileFamily,
   LocalPlaybackDto,
   LocalPlaybackStateFamily,
+  PhotoGalleryStateFamily,
   UserRoleFamily
 } from "../../family/domain-shapes";
 import { getFamilyPrisma } from "../db";
@@ -21,6 +23,18 @@ const detailSelect = {
   visibility: true,
   posterPath: true,
   thumbnailPath: true,
+  coverPhotoId: true,
+  photoAssets: {
+    orderBy: [{ sortOrder: "asc" as const }, { createdAt: "asc" as const }],
+    select: {
+      id: true,
+      filePath: true,
+      sortOrder: true,
+      width: true,
+      height: true,
+      mimeType: true
+    }
+  },
   category: {
     select: {
       id: true,
@@ -110,6 +124,17 @@ export async function resolveLocalPlaybackForContent(
   contentItemId: string
 ): Promise<LocalPlaybackStateFamily> {
   const prisma = getFamilyPrisma();
+  const itemMeta = await prisma.contentItem.findUnique({
+    where: { id: contentItemId },
+    select: { type: true }
+  });
+  if (itemMeta?.type === "photo_gallery") {
+    return {
+      state: "missing_media",
+      reason: "Galería de fotos: abrí el visor más abajo."
+    };
+  }
+
   const asset = await prisma.mediaAsset.findFirst({
     where: { contentItemId },
     orderBy: { updatedAt: "desc" }
@@ -174,9 +199,29 @@ export async function getContentDetailForActiveProfile(
   }
 
   const playback = await resolveLocalPlaybackForContent(row.id);
+
+  let photoGallery: PhotoGalleryStateFamily = null;
+  if (row.type === "photo_gallery") {
+    if (row.photoAssets.length === 0) {
+      photoGallery = { state: "empty" };
+    } else {
+      const listed = row.photoAssets.map((p) => ({
+        id: p.id,
+        url: familyGalleryPublicPhotoUrl(p.id),
+        sortOrder: p.sortOrder,
+        width: p.width,
+        height: p.height,
+        mimeType: p.mimeType
+      }));
+      const ordered = [...listed].sort((a, b) => a.sortOrder - b.sortOrder);
+      photoGallery = { state: "ready", photos: ordered };
+    }
+  }
+
   return {
     item: mapDetail(row),
-    playback
+    playback,
+    photoGallery
   };
 }
 

@@ -15,6 +15,11 @@ const OPTIONS = [
     value: "clip",
     label: "Clip",
     description: "Contenido corto o bonus."
+  },
+  {
+    value: "photo_gallery",
+    label: "Galeria de fotos",
+    description: "Album o coleccion de imagenes familiares."
   }
 ] as const;
 

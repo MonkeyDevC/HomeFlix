@@ -11,6 +11,8 @@ function contentTypeLabel(type: ContentDetailFamilyDto["type"]): string {
       return "Serie";
     case "clip":
       return "Clip";
+    case "photo_gallery":
+      return "Galería";
     default:
       return "Contenido";
   }
@@ -35,7 +37,8 @@ export function DetailHero({
   resumeProgressSeconds,
   durationSeconds,
   seriesLabel,
-  episodesCount
+  episodesCount,
+  heroBackdropUrl
 }: Readonly<{
   item: ContentDetailFamilyDto;
   canPlay: boolean;
@@ -43,8 +46,10 @@ export function DetailHero({
   durationSeconds: number | null;
   seriesLabel: string | null;
   episodesCount: number | null;
+  /** Poster / miniatura / primera foto de galería para el hero. */
+  heroBackdropUrl?: string | null;
 }>) {
-  const background = item.thumbnailPath ?? item.posterPath;
+  const background = heroBackdropUrl ?? item.thumbnailPath ?? item.posterPath;
   const typeLabel = contentTypeLabel(item.type);
   const runtimeLabel = formatRuntimeMinutes(durationSeconds);
   const resumeLabel = formatResume(resumeProgressSeconds);
@@ -106,7 +111,11 @@ export function DetailHero({
 
         <p className="sf-detail-hero-synopsis">{synopsis}</p>
 
-        <DetailActions canPlay={canPlay} resumeLabel={resumeLabel} />
+        <DetailActions
+          canPlay={canPlay}
+          isPhotoGallery={item.type === "photo_gallery"}
+          resumeLabel={resumeLabel}
+        />
       </div>
     </section>
   );

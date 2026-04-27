@@ -7,7 +7,13 @@ import type {
 import { formatRuntimeMinutes } from "../../lib/family/playback-time";
 import type { DetailRelatedItemDto } from "../../lib/server/catalog/content-detail-related";
 
-function playbackStatusLabel(state: LocalPlaybackStateFamily): string {
+function playbackStatusLabel(
+  state: LocalPlaybackStateFamily,
+  contentType: ContentDetailFamilyDto["type"]
+): string {
+  if (contentType === "photo_gallery") {
+    return "Galería de imágenes";
+  }
   switch (state.state) {
     case "ready":
       return "Listo para reproducir";
@@ -92,6 +98,8 @@ function contentTypeLabel(type: ContentDetailFamilyDto["type"]): string {
       return "Episodio de serie";
     case "clip":
       return "Clip";
+    case "photo_gallery":
+      return "Galería de fotos";
     default:
       return "Contenido";
   }
@@ -150,7 +158,7 @@ export function DetailMetaPanel({
             </div>
             <div className="sf-detail-meta-row">
               <dt>Reproducción</dt>
-              <dd>{playbackStatusLabel(playback)}</dd>
+              <dd>{playbackStatusLabel(playback, item.type)}</dd>
             </div>
             <div className="sf-detail-meta-row">
               <dt>Visibilidad</dt>

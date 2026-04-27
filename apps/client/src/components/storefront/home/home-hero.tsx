@@ -39,6 +39,8 @@ function formatTypeLabel(item: FamilyHomeCardDto | null): string | null {
       return "Episodio";
     case "clip":
       return "Clip";
+    case "photo_gallery":
+      return "Galería";
     default:
       return item.type;
   }

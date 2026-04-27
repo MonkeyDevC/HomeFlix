@@ -13,6 +13,7 @@ import { adminParseJson } from "../../lib/family/admin-json";
 import { AdminInfoHint } from "./admin-info-hint";
 import { ContentKindSelector } from "./content-kind-selector";
 import { ContentPlacementSelector } from "./content-placement-selector";
+import { GallerySeriesPlacementSection } from "./gallery-series-placement-section";
 import { ReleaseScopeSection } from "./release-scope-section";
 import { SlugPreviewField } from "./slug-preview-field";
 
@@ -59,6 +60,7 @@ export function ContentItemForm({
   categories,
   collections,
   initialCollectionIds,
+  initialGalleryLinkPosition,
   preset
 }: Readonly<{
   mode: "create" | "edit";
@@ -67,6 +69,8 @@ export function ContentItemForm({
   categories: ReadonlyArray<{ id: string; name: string }>;
   collections: ReadonlyArray<{ id: string; name: string }>;
   initialCollectionIds?: readonly string[];
+  /** Posición en la serie si hay un solo enlace (p. ej. galería en una sola collection). */
+  initialGalleryLinkPosition?: string;
   preset?: ContentPreset;
 }>) {
   const router = useRouter();
@@ -91,6 +95,9 @@ export function ContentItemForm({
   const [maturityRating, setMaturityRating] = useState(initial?.maturityRating ?? "");
   const [seasonNumber, setSeasonNumber] = useState(initial?.seasonNumber ?? "");
   const [episodeNumber, setEpisodeNumber] = useState(initial?.episodeNumber ?? "");
+  const [gallerySeriesPosition, setGallerySeriesPosition] = useState(
+    initialGalleryLinkPosition ?? "0"
+  );
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +115,17 @@ export function ContentItemForm({
     () => type === "episode" && selectedCollectionIds.length === 0,
     [type, selectedCollectionIds]
   );
+
+  function buildCollectionLinks(): Array<{ collectionId: string; position: number }> {
+    if (selectedCollectionIds.length === 0) {
+      return [];
+    }
+    if (type === "photo_gallery" && selectedCollectionIds.length === 1) {
+      const pos = Math.max(0, Number.parseInt(gallerySeriesPosition, 10) || 0);
+      return [{ collectionId: selectedCollectionIds[0]!, position: pos }];
+    }
+    return selectedCollectionIds.map((cid, idx) => ({ collectionId: cid, position: idx }));
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -163,7 +181,7 @@ export function ContentItemForm({
           credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            links: selectedCollectionIds.map((cid, idx) => ({ collectionId: cid, position: idx }))
+            links: buildCollectionLinks()
           })
         });
         const linkParsed = await adminParseJson<{ links: AdminCollectionLinkDto[] }>(linkRes);
@@ -200,7 +218,7 @@ export function ContentItemForm({
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        links: selectedCollectionIds.map((cid, idx) => ({ collectionId: cid, position: idx }))
+        links: buildCollectionLinks()
       })
     });
     const linkParsed = await adminParseJson<{ links: AdminCollectionLinkDto[] }>(linkRes);
@@ -261,6 +279,13 @@ export function ContentItemForm({
         selectedCollectionIds={selectedCollectionIds}
         type={type}
       />
+
+      {type === "photo_gallery" && selectedCollectionIds.length === 1 ? (
+        <GallerySeriesPlacementSection
+          onChange={setGallerySeriesPosition}
+          value={gallerySeriesPosition}
+        />
+      ) : null}
 
       {showEpisodeWarning ? (
         <p className="hf-admin-form-msg hf-admin-form-msg--error" role="status">

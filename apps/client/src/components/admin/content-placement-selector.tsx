@@ -43,7 +43,11 @@ export function ContentPlacementSelector({
 
       <div className="hf-admin-field">
         <div className="hf-admin-field-label">
-          {type === "episode" ? "Serie o agrupacion (obligatoria para episodios)" : "Serie o agrupacion"}
+          {type === "episode"
+            ? "Serie o agrupacion (obligatoria para episodios)"
+            : type === "photo_gallery"
+              ? "Serie (opcional) — galería como álbum dentro de la serie"
+              : "Serie o agrupacion"}
         </div>
         {collections.length === 0 ? (
           <p className="hf-admin-field-hint">Aun no hay series creadas.</p>
@@ -65,9 +69,17 @@ export function ContentPlacementSelector({
             })}
           </div>
         )}
-        <p className="hf-admin-field-hint">
-          Una pelicula puede quedar suelta. Un episodio debe pertenecer al menos a una serie o agrupacion.
-        </p>
+        {type === "photo_gallery" ? (
+          <p className="hf-admin-field-hint">
+            Si marcas una serie, esta galería aparece en el listado de capítulos y álbumes de esa
+            serie. Dejá todo sin marcar para una galería independiente en el catálogo.
+          </p>
+        ) : (
+          <p className="hf-admin-field-hint">
+            Una pelicula puede quedar suelta. Un episodio debe pertenecer al menos a una serie o
+            agrupacion.
+          </p>
+        )}
       </div>
     </div>
   );

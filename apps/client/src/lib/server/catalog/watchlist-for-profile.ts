@@ -1,5 +1,6 @@
 import type { UserRoleFamily } from "../../family/domain-shapes";
 import type { FamilyHomeCardDto } from "../../family/storefront-contracts";
+import { familyGalleryPublicPhotoUrl } from "../../family/photo-constants";
 import { getFamilyPrisma } from "../db";
 import { prismaWhereStorefrontVisibleContent } from "./content-storefront-visibility";
 import { groupSeriesForCatalog, type CatalogItemRaw } from "./group-series-for-catalog";
@@ -12,8 +13,14 @@ const watchlistCardSelect = {
   posterPath: true,
   thumbnailPath: true,
   type: true,
+  coverPhotoId: true,
   seasonNumber: true,
   episodeNumber: true,
+  photoAssets: {
+    orderBy: { sortOrder: "asc" as const },
+    take: 1,
+    select: { id: true }
+  },
   category: {
     select: {
       id: true,
@@ -54,8 +61,10 @@ type WatchlistItemRaw = {
   posterPath: string | null;
   thumbnailPath: string | null;
   type: string;
+  coverPhotoId: string | null;
   seasonNumber: number | null;
   episodeNumber: number | null;
+  photoAssets: Array<{ id: string }>;
   category: { id: string; slug: string; name: string } | null;
   collectionLinks: Array<{
     collection: {
@@ -72,13 +81,28 @@ function toCatalogRaw(row: WatchlistItemRaw): CatalogItemRaw {
   const previewAsset = row.mediaAssets[0] ?? null;
   const primaryCollection = row.collectionLinks[0]?.collection ?? null;
 
+  const galleryFallback =
+    row.type === "photo_gallery"
+      ? row.coverPhotoId !== null
+        ? familyGalleryPublicPhotoUrl(row.coverPhotoId)
+        : row.photoAssets[0] !== undefined
+          ? familyGalleryPublicPhotoUrl(row.photoAssets[0].id)
+          : null
+      : null;
+  const posterPath =
+    row.type === "photo_gallery"
+      ? (row.posterPath ?? row.thumbnailPath ?? galleryFallback)
+      : row.posterPath;
+  const thumbnailPath =
+    row.type === "photo_gallery" ? (row.thumbnailPath ?? row.posterPath ?? galleryFallback) : row.thumbnailPath;
+
   return {
     id: row.id,
     slug: row.slug,
     title: row.title,
     synopsis: row.synopsis,
-    posterPath: row.posterPath,
-    thumbnailPath: row.thumbnailPath,
+    posterPath,
+    thumbnailPath,
     type: row.type,
     seasonNumber: row.seasonNumber,
     episodeNumber: row.episodeNumber,

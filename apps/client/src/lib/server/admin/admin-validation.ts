@@ -2,7 +2,7 @@ const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 const EDITORIAL = new Set(["draft", "published", "archived"]);
 const VISIBILITY = new Set(["private", "household", "public_internal"]);
-const CONTENT_TYPE = new Set(["movie", "clip", "episode"]);
+const CONTENT_TYPE = new Set(["movie", "clip", "episode", "photo_gallery"]);
 
 export function normalizeSlug(raw: string): string {
   return raw.trim().toLowerCase();
@@ -35,7 +35,7 @@ export function assertVisibility(v: string): string | null {
 
 export function assertContentType(v: string): string | null {
   if (!CONTENT_TYPE.has(v)) {
-    return "Tipo inválido (movie | clip | episode).";
+    return "Tipo inválido (movie | clip | episode | photo_gallery).";
   }
   return null;
 }

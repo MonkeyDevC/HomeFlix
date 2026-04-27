@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   AdminCollectionLinkDto,
   AdminContentItemDetailDto,
@@ -17,13 +17,15 @@ import {
   IconSpinner
 } from "./admin-nav-icons";
 import { MediaDropzoneCard } from "./media-dropzone-card";
+import { PhotoGalleryManager } from "./photo-gallery-manager";
 import { ReleaseScopeSection } from "./release-scope-section";
+import { SeriesPlacementSelector } from "./series-placement-selector";
 
 type CategoryOption = Readonly<{ id: string; name: string }>;
 type CollectionOption = Readonly<{ id: string; name: string }>;
 type ProfileOption = Readonly<{ id: string; displayName: string; userId: string; userEmail: string }>;
 
-type ContentKind = "movie" | "episode" | "clip";
+type ContentKind = "movie" | "episode" | "clip" | "photo_gallery";
 type EditorialStatus = "draft" | "published" | "archived";
 type Visibility = "private" | "household" | "public_internal";
 
@@ -46,7 +48,8 @@ const STEPS: ReadonlyArray<{ id: StepId; title: string }> = [
 const KIND_OPTIONS: ReadonlyArray<{ value: ContentKind; label: string; hint: string }> = [
   { value: "movie", label: "Película", hint: "(Una pieza suelta)" },
   { value: "episode", label: "Episodio", hint: "(Parte de una serie)" },
-  { value: "clip", label: "Clip", hint: "(Corto o extra)" }
+  { value: "clip", label: "Clip", hint: "(Corto o extra)" },
+  { value: "photo_gallery", label: "Galería de fotos", hint: "(Álbum familiar)" }
 ];
 
 const STATUS_OPTIONS: ReadonlyArray<{ value: EditorialStatus; label: string }> = [
@@ -89,11 +92,14 @@ export function ContentCreateWizard({ categories, collections, profiles, preset 
   const [contentId, setContentId] = useState<string | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
   const [bootstrapping, setBootstrapping] = useState(true);
-  const draftInitRef = useRef(false);
 
   const presetKind = (preset?.kind as ContentKind | undefined) ?? undefined;
   const [type, setType] = useState<ContentKind>(
-    presetKind !== undefined && (presetKind === "movie" || presetKind === "episode" || presetKind === "clip")
+    presetKind !== undefined &&
+      (presetKind === "movie" ||
+        presetKind === "episode" ||
+        presetKind === "clip" ||
+        presetKind === "photo_gallery")
       ? presetKind
       : "movie"
   );
@@ -110,6 +116,7 @@ export function ContentCreateWizard({ categories, collections, profiles, preset 
   const [collectionId, setCollectionId] = useState<string>(preset?.collectionId ?? "");
   const [seasonNumber, setSeasonNumber] = useState("");
   const [episodeNumber, setEpisodeNumber] = useState("");
+  const [gallerySeriesPosition, setGallerySeriesPosition] = useState("0");
 
   const [editorialStatus, setEditorialStatus] = useState<EditorialStatus>("draft");
   const [releaseScope, setReleaseScope] = useState<"admin_only" | "public_catalog">("admin_only");
@@ -121,16 +128,44 @@ export function ContentCreateWizard({ categories, collections, profiles, preset 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  /**
+   * - Sin `contentId`: crea el borrador (POST) con el `type` actual. Si el usuario
+   *   cambia de tipo antes de que termine la petición, se aborta y se reintenta.
+   * - Con `contentId`: mantiene el tipo alineado en el servidor (PATCH), p. ej. al
+   *   elegir "Galería" después de haber creado el borrador como película. Sin esto
+   *   el POST de fotos ve `type: movie` y devuelve el error de galería.
+   */
   useEffect(() => {
-    if (draftInitRef.current) return;
-    draftInitRef.current = true;
+    if (contentId !== null) {
+      let cancelled = false;
+      void (async () => {
+        try {
+          const res = await fetch(`/api/family/admin/content/${contentId}`, {
+            method: "PATCH",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type })
+          });
+          if (cancelled || !res.ok) {
+            return;
+          }
+        } catch {
+          /* ignore */
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
 
-    const run = async () => {
-      setBootstrapping(true);
-      setDraftError(null);
+    const ac = new AbortController();
+    setBootstrapping(true);
+    setDraftError(null);
+    void (async () => {
       try {
         const res = await fetch("/api/family/admin/content", {
           method: "POST",
+          signal: ac.signal,
           credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -142,21 +177,53 @@ export function ContentCreateWizard({ categories, collections, profiles, preset 
           })
         });
         const parsed = await adminParseJson<{ item: AdminContentItemListDto }>(res);
-        if (!parsed.ok) {
+        if (parsed.ok) {
+          setContentId(parsed.data.item.id);
+        } else {
           setDraftError(parsed.message);
+        }
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
           return;
         }
-        setContentId(parsed.data.item.id);
-      } catch (err) {
         setDraftError(err instanceof Error ? err.message : "No se pudo crear el borrador.");
       } finally {
         setBootstrapping(false);
       }
+    })();
+
+    return () => {
+      ac.abort();
     };
-    void run();
-  }, [type]);
+  }, [type, contentId]);
 
   const videoQualityLabel = useMemo(() => formatVideoQuality(media), [media]);
+
+  useEffect(() => {
+    if (contentId === null || step !== 2 || type !== "photo_gallery") {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/family/admin/content/${contentId}/media`, {
+          credentials: "include"
+        });
+        if (!res.ok || cancelled) {
+          return;
+        }
+        const data = (await res.json()) as { item: AdminContentMediaSummaryDto };
+        if (!cancelled) {
+          setMedia(data.item);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [contentId, step, type]);
 
   useEffect(() => {
     if (media?.posterPath === null || media?.posterPath === undefined) {
@@ -181,6 +248,9 @@ export function ContentCreateWizard({ categories, collections, profiles, preset 
       return { ok: true };
     }
     if (step === 2) {
+      if (type === "photo_gallery") {
+        return { ok: true };
+      }
       const posterPath = media?.posterPath ?? null;
       const thumbPath = media?.thumbnailPath ?? null;
       if (posterPath !== null && !posterMediaGate) {
@@ -256,6 +326,24 @@ export function ContentCreateWizard({ categories, collections, profiles, preset 
       return;
     }
 
+    if (editorialStatus === "published" && type === "photo_gallery") {
+      try {
+        const check = await fetch(`/api/family/admin/content/${contentId}/media`, {
+          credentials: "include"
+        });
+        if (check.ok) {
+          const body = (await check.json()) as { item: AdminContentMediaSummaryDto };
+          if (body.item.photos.length < 1) {
+            setSubmitError("Una galería publicada debe tener al menos una foto.");
+            return;
+          }
+        }
+      } catch {
+        setSubmitError("No se pudo validar las fotos de la galería.");
+        return;
+      }
+    }
+
     setSubmitting(true);
     setSubmitError(null);
 
@@ -298,6 +386,29 @@ export function ContentCreateWizard({ categories, collections, profiles, preset 
         const linkParsed = await adminParseJson<{ links: AdminCollectionLinkDto[] }>(linkRes);
         if (!linkParsed.ok) {
           setSubmitError(`Contenido guardado, pero falló la asignación de serie: ${linkParsed.message}`);
+          setSubmitting(false);
+          return;
+        }
+      }
+
+      if (type === "photo_gallery") {
+        const pos = Math.max(0, Number.parseInt(gallerySeriesPosition, 10) || 0);
+        const linkRes = await fetch(`/api/family/admin/content/${contentId}/collections`, {
+          method: "PUT",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            links:
+              collectionId !== ""
+                ? [{ collectionId, position: pos }]
+                : []
+          })
+        });
+        const linkParsed = await adminParseJson<{ links: AdminCollectionLinkDto[] }>(linkRes);
+        if (!linkParsed.ok) {
+          setSubmitError(
+            `Contenido guardado, pero falló la vinculación a la serie: ${linkParsed.message}`
+          );
           setSubmitting(false);
           return;
         }
@@ -373,6 +484,7 @@ export function ContentCreateWizard({ categories, collections, profiles, preset 
 
         {step === 2 ? (
           <StepMedia
+            type={type}
             contentId={contentId}
             media={media}
             onMediaChange={setMedia}
@@ -389,7 +501,7 @@ export function ContentCreateWizard({ categories, collections, profiles, preset 
             onTitleChange={setTitle}
             synopsis={synopsis}
             onSynopsisChange={setSynopsis}
-            durationLabel={videoQualityLabel ?? "—"}
+            durationLabel={type === "photo_gallery" ? "Galería de fotos" : (videoQualityLabel ?? "—")}
             releaseYear={releaseYear}
             onReleaseYearChange={setReleaseYear}
             maturity={maturity}
@@ -400,6 +512,8 @@ export function ContentCreateWizard({ categories, collections, profiles, preset 
             collectionId={collectionId}
             onCollectionChange={setCollectionId}
             collections={collections}
+            gallerySeriesPosition={gallerySeriesPosition}
+            onGallerySeriesPositionChange={setGallerySeriesPosition}
             seasonNumber={seasonNumber}
             onSeasonChange={setSeasonNumber}
             episodeNumber={episodeNumber}
@@ -476,6 +590,27 @@ export function ContentCreateWizard({ categories, collections, profiles, preset 
   );
 }
 
+function IconGallery({ width, height }: Readonly<{ width: number; height: number }>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={width}
+      height={height}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="3" y="4" width="8" height="7" rx="1.2" />
+      <rect x="13" y="4" width="8" height="4" rx="1.2" />
+      <rect x="13" y="11" width="8" height="9" rx="1.2" />
+      <rect x="3" y="14" width="8" height="6" rx="1.2" />
+    </svg>
+  );
+}
+
 function StepType({
   value,
   onChange
@@ -498,6 +633,7 @@ function StepType({
                 {opt.value === "movie" ? <IconFilm width={22} height={22} /> : null}
                 {opt.value === "episode" ? <IconSeries width={22} height={22} /> : null}
                 {opt.value === "clip" ? <IconClipShort /> : null}
+                {opt.value === "photo_gallery" ? <IconGallery width={22} height={22} /> : null}
               </span>
               <span className="hf-admin-kind-card__copy">
                 <span className="hf-admin-kind-card__label">{opt.label}</span>
@@ -517,6 +653,7 @@ function StepType({
 }
 
 function StepMedia({
+  type,
   contentId,
   media,
   onMediaChange,
@@ -524,6 +661,7 @@ function StepMedia({
   onThumbnailGateChange,
   videoQualityLabel
 }: Readonly<{
+  type: ContentKind;
   contentId: string | null;
   media: AdminContentMediaSummaryDto | null;
   onMediaChange: (m: AdminContentMediaSummaryDto) => void;
@@ -532,6 +670,39 @@ function StepMedia({
   videoQualityLabel: string | null;
 }>) {
   const disabledReason = contentId === null ? "Preparando borrador…" : null;
+
+  if (type === "photo_gallery") {
+    if (contentId === null) {
+      return (
+        <section className="hf-admin-wizard__section">
+          <h2 className="hf-admin-wizard__section-title">Step 2 - Fotos</h2>
+          <p className="hf-admin-field-hint">Preparando borrador…</p>
+        </section>
+      );
+    }
+    if (media === null) {
+      return (
+        <section className="hf-admin-wizard__section">
+          <h2 className="hf-admin-wizard__section-title">Step 2 - Fotos</h2>
+          <p className="hf-admin-field-hint">Cargando galería…</p>
+        </section>
+      );
+    }
+    return (
+      <section className="hf-admin-wizard__section">
+        <h2 className="hf-admin-wizard__section-title">Step 2 - Fotos de la galería</h2>
+        <p className="hf-admin-field-hint">
+          Podés continuar sin fotos; para publicar, subí al menos una imagen (JPG, PNG o WebP).
+        </p>
+        <PhotoGalleryManager
+          contentItemId={contentId}
+          initial={media}
+          onSummaryChange={onMediaChange}
+        />
+      </section>
+    );
+  }
+
   return (
     <section className="hf-admin-wizard__section">
       <h2 className="hf-admin-wizard__section-title">Step 2 - Media (Primero, no después)</h2>
@@ -588,6 +759,8 @@ function StepInfo({
   collectionId,
   onCollectionChange,
   collections,
+  gallerySeriesPosition,
+  onGallerySeriesPositionChange,
   seasonNumber,
   onSeasonChange,
   episodeNumber,
@@ -609,12 +782,15 @@ function StepInfo({
   collectionId: string;
   onCollectionChange: (v: string) => void;
   collections: ReadonlyArray<CollectionOption>;
+  gallerySeriesPosition: string;
+  onGallerySeriesPositionChange: (v: string) => void;
   seasonNumber: string;
   onSeasonChange: (v: string) => void;
   episodeNumber: string;
   onEpisodeChange: (v: string) => void;
 }>) {
   const isEpisode = type === "episode";
+  const isGallery = type === "photo_gallery";
   return (
     <section className="hf-admin-wizard__section">
       <h2 className="hf-admin-wizard__section-title">Step 3 - Información Principal &amp; Organización</h2>
@@ -702,53 +878,78 @@ function StepInfo({
               ))}
             </select>
           </div>
-          <div className={`hf-admin-field${isEpisode ? "" : " is-muted"}`}>
-            <label className="hf-admin-field-label" htmlFor="wz-series">
-              {isEpisode ? "Si es episodio: Serie" : "Serie (solo para episodios)"}
-            </label>
-            <select
-              id="wz-series"
-              className="hf-admin-input"
-              value={collectionId}
-              onChange={(e) => onCollectionChange(e.target.value)}
-              disabled={!isEpisode}
-            >
-              <option value="">— Selecciona una serie —</option>
-              {collections.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
-          <div className="hf-admin-wizard__info-pair">
-            <div className={`hf-admin-field${isEpisode ? "" : " is-muted"}`}>
-              <label className="hf-admin-field-label" htmlFor="wz-season">Temporada</label>
-              <input
-                id="wz-season"
-                className="hf-admin-input"
-                type="number"
-                min={1}
-                max={999}
-                value={seasonNumber}
-                onChange={(e) => onSeasonChange(e.target.value)}
-                disabled={!isEpisode}
-                placeholder="1"
+          {isGallery ? (
+            <>
+              <p className="hf-admin-field-hint" style={{ marginBottom: 12 }}>
+                ¿Agregar esta galería a una serie? Si elegís una, el álbum aparece en el detalle
+                de la serie mezclado con capítulos. Si no, queda como galería del catálogo.
+              </p>
+              <SeriesPlacementSelector
+                collections={collections}
+                disabled={false}
+                onChange={onCollectionChange}
+                onPositionChange={onGallerySeriesPositionChange}
+                position={gallerySeriesPosition}
+                value={collectionId}
               />
-            </div>
-            <div className={`hf-admin-field${isEpisode ? "" : " is-muted"}`}>
-              <label className="hf-admin-field-label" htmlFor="wz-episode">Número de episodio</label>
-              <input
-                id="wz-episode"
-                className="hf-admin-input"
-                type="number"
-                min={1}
-                max={9999}
-                value={episodeNumber}
-                onChange={(e) => onEpisodeChange(e.target.value)}
-                disabled={!isEpisode}
-                placeholder="3"
-              />
-            </div>
-          </div>
+              <p className="hf-admin-field-hint">
+                El orden en la serie define en qué posición del listado aparece respecto a otros
+                capítulos y galerías.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className={`hf-admin-field${isEpisode ? "" : " is-muted"}`}>
+                <label className="hf-admin-field-label" htmlFor="wz-series">
+                  {isEpisode ? "Si es episodio: Serie" : "Serie (solo para episodios)"}
+                </label>
+                <select
+                  id="wz-series"
+                  className="hf-admin-input"
+                  value={collectionId}
+                  onChange={(e) => onCollectionChange(e.target.value)}
+                  disabled={!isEpisode}
+                >
+                  <option value="">— Selecciona una serie —</option>
+                  {collections.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="hf-admin-wizard__info-pair">
+                <div className={`hf-admin-field${isEpisode ? "" : " is-muted"}`}>
+                  <label className="hf-admin-field-label" htmlFor="wz-season">Temporada</label>
+                  <input
+                    id="wz-season"
+                    className="hf-admin-input"
+                    type="number"
+                    min={1}
+                    max={999}
+                    value={seasonNumber}
+                    onChange={(e) => onSeasonChange(e.target.value)}
+                    disabled={!isEpisode}
+                    placeholder="1"
+                  />
+                </div>
+                <div className={`hf-admin-field${isEpisode ? "" : " is-muted"}`}>
+                  <label className="hf-admin-field-label" htmlFor="wz-episode">Número de episodio</label>
+                  <input
+                    id="wz-episode"
+                    className="hf-admin-input"
+                    type="number"
+                    min={1}
+                    max={9999}
+                    value={episodeNumber}
+                    onChange={(e) => onEpisodeChange(e.target.value)}
+                    disabled={!isEpisode}
+                    placeholder="3"
+                  />
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </section>

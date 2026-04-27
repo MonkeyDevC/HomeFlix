@@ -2,12 +2,12 @@ import { randomUUID } from "node:crypto";
 import { mkdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
-import type { AdminContentMediaSummaryDto } from "../../../../../../../../lib/family/admin-contracts";
 import {
   removeStoredFileMaybe,
   saveUploadFile,
   validateUploadFile
 } from "../../../../../../../../lib/server/admin/admin-media-storage";
+import { buildAdminContentMediaSummaryDto } from "../../../../../../../../lib/server/admin/admin-content-media-summary";
 import { mapMediaAssetToDto } from "../../../../../../../../lib/server/admin/media-asset-mapper";
 import {
   isBrowserFriendlyCodec,
@@ -281,12 +281,10 @@ export async function POST(
       }
     }
 
-    const summary: AdminContentMediaSummaryDto = {
-      contentItemId,
-      posterPath: finalPoster,
-      thumbnailPath: finalThumbnail,
-      videoAsset: mapMediaAssetToDto(video)
-    };
+    const summary = await buildAdminContentMediaSummaryDto(contentItemId);
+    if (summary === null) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
 
     return NextResponse.json({ item: summary }, { status: 201 });
   } catch (error) {

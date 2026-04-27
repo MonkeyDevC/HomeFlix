@@ -14,6 +14,7 @@
  */
 import type { Prisma } from "../../../generated/prisma-family/client";
 import type { ContentTypeFamily, UserRoleFamily } from "../../family/domain-shapes";
+import { familyGalleryPublicPhotoUrl } from "../../family/photo-constants";
 import { getFamilyPrisma } from "../db";
 import { prismaWhereStorefrontVisibleContent } from "./content-storefront-visibility";
 
@@ -31,6 +32,8 @@ export type SeriesEpisodeDto = Readonly<{
   durationSeconds: number | null;
   progressSeconds: number | null;
   hasMedia: boolean;
+  /** Solo `photo_gallery`: cantidad de fotos en la galería. */
+  photoCount: number;
 }>;
 
 export type SeriesDetailDto = Readonly<{
@@ -57,6 +60,7 @@ const linkSelect = {
       title: true,
       synopsis: true,
       type: true,
+      coverPhotoId: true,
       posterPath: true,
       thumbnailPath: true,
       seasonNumber: true,
@@ -69,6 +73,14 @@ const linkSelect = {
         orderBy: { updatedAt: "desc" },
         take: 1,
         select: { id: true, durationSeconds: true }
+      },
+      photoAssets: {
+        orderBy: { sortOrder: "asc" as const },
+        take: 1,
+        select: { id: true }
+      },
+      _count: {
+        select: { photoAssets: true }
       }
     }
   }
@@ -80,6 +92,9 @@ function sortSeriesEpisodesAsc(
   episodes: readonly SeriesEpisodeDto[]
 ): readonly SeriesEpisodeDto[] {
   return [...episodes].sort((a, b) => {
+    if (a.position !== b.position) {
+      return a.position - b.position;
+    }
     const seasonA = a.seasonNumber ?? Number.POSITIVE_INFINITY;
     const seasonB = b.seasonNumber ?? Number.POSITIVE_INFINITY;
     if (seasonA !== seasonB) return seasonA - seasonB;
@@ -88,31 +103,49 @@ function sortSeriesEpisodesAsc(
     const epB = b.episodeNumber ?? Number.POSITIVE_INFINITY;
     if (epA !== epB) return epA - epB;
 
-    if (a.position !== b.position) return a.position - b.position;
     return a.title.localeCompare(b.title);
   });
 }
 
 function pickRepresentative(links: readonly LinkRaw[]): LinkRaw | null {
   if (links.length === 0) return null;
-  // Menor (seasonNumber, episodeNumber); fallback al primero por position.
-  let best = links[0]!;
-  for (const link of links) {
-    const bestSeason = best.contentItem.seasonNumber ?? Number.POSITIVE_INFINITY;
-    const candSeason = link.contentItem.seasonNumber ?? Number.POSITIVE_INFINITY;
-    if (candSeason < bestSeason) {
-      best = link;
-      continue;
-    }
-    if (candSeason === bestSeason) {
-      const bestEp = best.contentItem.episodeNumber ?? Number.POSITIVE_INFINITY;
-      const candEp = link.contentItem.episodeNumber ?? Number.POSITIVE_INFINITY;
-      if (candEp < bestEp) {
-        best = link;
-      }
-    }
+  const byPos = [...links].sort((a, b) => a.position - b.position);
+  const firstVideo = byPos.find(
+    (l) =>
+      l.contentItem.type !== "photo_gallery" && l.contentItem.mediaAssets[0] !== undefined
+  );
+  if (firstVideo !== undefined) {
+    return firstVideo;
   }
-  return best;
+  const firstWithPhotos = byPos.find(
+    (l) => l.contentItem.type === "photo_gallery" && l.contentItem._count.photoAssets > 0
+  );
+  if (firstWithPhotos !== undefined) {
+    return firstWithPhotos;
+  }
+  return byPos[0] ?? null;
+}
+
+function cardArtForSeriesItem(
+  item: LinkRaw["contentItem"]
+): { poster: string | null; thumb: string | null } {
+  if (item.type === "photo_gallery") {
+    const n = item._count.photoAssets;
+    if (n < 1) {
+      return { poster: item.posterPath, thumb: item.thumbnailPath };
+    }
+    const cover =
+      item.coverPhotoId !== null
+        ? familyGalleryPublicPhotoUrl(item.coverPhotoId)
+        : item.photoAssets[0] !== undefined
+          ? familyGalleryPublicPhotoUrl(item.photoAssets[0].id)
+          : null;
+    return {
+      poster: item.posterPath ?? item.thumbnailPath ?? cover,
+      thumb: item.thumbnailPath ?? item.posterPath ?? cover
+    };
+  }
+  return { poster: item.posterPath, thumb: item.thumbnailPath };
 }
 
 export async function getSeriesDetailForActiveProfile(
@@ -166,31 +199,38 @@ export async function getSeriesDetailForActiveProfile(
 
   const representative = pickRepresentative(links);
   const repItem = representative?.contentItem ?? null;
-  const repAsset = repItem?.mediaAssets[0] ?? null;
+  const repAsset = repItem?.type === "photo_gallery" ? null : (repItem?.mediaAssets[0] ?? null);
+  const repCardArt = repItem === null ? { poster: null, thumb: null } : cardArtForSeriesItem(repItem);
 
   let total = 0;
   let haveAnyDuration = false;
   const episodesUnsorted: SeriesEpisodeDto[] = links.map((link) => {
     const item = link.contentItem;
     const asset = item.mediaAssets[0] ?? null;
-    if (asset !== null && asset.durationSeconds !== null) {
+    const photoCount = item._count.photoAssets;
+    if (item.type !== "photo_gallery" && asset !== null && asset.durationSeconds !== null) {
       total += asset.durationSeconds;
       haveAnyDuration = true;
     }
+    const isGallery = item.type === "photo_gallery";
+    const hasVideo = !isGallery && asset !== null;
+    const hasGallery = isGallery && photoCount > 0;
+    const art = cardArtForSeriesItem(item);
     return {
       id: item.id,
       slug: item.slug,
       title: item.title,
       synopsis: item.synopsis,
       type: item.type as ContentTypeFamily,
-      posterPath: item.posterPath,
-      thumbnailPath: item.thumbnailPath,
+      posterPath: art.poster,
+      thumbnailPath: art.thumb,
       seasonNumber: item.seasonNumber,
       episodeNumber: item.episodeNumber,
       position: link.position,
       durationSeconds: asset?.durationSeconds ?? null,
       progressSeconds: progressById.get(item.id) ?? null,
-      hasMedia: asset !== null
+      hasMedia: hasVideo || hasGallery,
+      photoCount
     };
   });
 
@@ -198,8 +238,8 @@ export async function getSeriesDetailForActiveProfile(
 
   return {
     collection,
-    posterPath: repItem?.posterPath ?? null,
-    thumbnailPath: repItem?.thumbnailPath ?? null,
+    posterPath: repCardArt.poster,
+    thumbnailPath: repCardArt.thumb,
     previewVideoAssetId: repAsset?.id ?? null,
     category: repItem?.category ?? null,
     totalDurationSeconds: haveAnyDuration ? total : null,

@@ -13,6 +13,7 @@ function kindLabel(type: string): string {
   if (type === "movie") return "Película";
   if (type === "episode") return "Episodio";
   if (type === "clip") return "Clip";
+  if (type === "photo_gallery") return "Galería";
   return type;
 }
 

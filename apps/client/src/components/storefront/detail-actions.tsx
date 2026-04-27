@@ -5,35 +5,65 @@ import { DETAIL_PLAY_EVENT } from "./detail-player";
 
 export function DetailActions({
   canPlay,
-  resumeLabel
+  resumeLabel,
+  isPhotoGallery
 }: Readonly<{
   canPlay: boolean;
   resumeLabel: string | null;
+  isPhotoGallery?: boolean;
 }>) {
   const [listed, setListed] = useState(false);
   const [liked, setLiked] = useState(false);
 
   const handlePlay = useCallback(() => {
+    if (isPhotoGallery === true) {
+      document.getElementById("photo-gallery-viewer")?.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      });
+      return;
+    }
     if (!canPlay) {
       const el = document.getElementById("detail-player");
       el?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
     window.dispatchEvent(new CustomEvent(DETAIL_PLAY_EVENT));
-  }, [canPlay]);
+  }, [canPlay, isPhotoGallery]);
 
   return (
     <div className="sf-detail-actions" role="group" aria-label="Acciones del contenido">
       <button
-        aria-label={resumeLabel !== null ? `Continuar desde ${resumeLabel}` : "Reproducir ahora"}
+        aria-label={
+          isPhotoGallery === true
+            ? "Ir a la galería de fotos"
+            : resumeLabel !== null
+              ? `Continuar desde ${resumeLabel}`
+              : "Reproducir ahora"
+        }
         className="sf-detail-btn sf-detail-btn--primary"
         onClick={handlePlay}
         type="button"
       >
-        <svg aria-hidden="true" height="20" viewBox="0 0 24 24" width="20">
-          <path d="M8 5v14l11-7z" fill="currentColor" />
-        </svg>
-        <span>{resumeLabel !== null ? "Seguir viendo" : "Ver ahora"}</span>
+        {isPhotoGallery === true ? (
+          <svg aria-hidden="true" height="20" viewBox="0 0 24 24" width="20">
+            <path
+              d="M4 6h7v7H4V6zm9 0h7v4h-7V6zM4 15h7v3H4v-3zm9 0h7v3h-7v-3z"
+              fill="currentColor"
+            />
+          </svg>
+        ) : (
+          <svg aria-hidden="true" height="20" viewBox="0 0 24 24" width="20">
+            <path d="M8 5v14l11-7z" fill="currentColor" />
+          </svg>
+        )}
+        <span>
+          {isPhotoGallery === true
+            ? "Ver galería"
+            : resumeLabel !== null
+              ? "Seguir viendo"
+              : "Ver ahora"}
+        </span>
       </button>
 
       <button

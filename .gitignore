@@ -16,3 +16,7 @@ apps/cms/uploads/*
 !apps/cms/uploads/.gitkeep
 apps/api/src/generated/prisma/
 apps/client/src/generated/prisma-family/
+apps/client/tsconfig.tsbuildinfo
+# Medios locales de desarrollo (no versionar subidas de prueba)
+apps/client/public/storage/**/*
+!apps/client/public/storage/**/.gitkeep

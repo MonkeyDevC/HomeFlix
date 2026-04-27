@@ -1,12 +1,11 @@
 import { Prisma } from "../../../../../../../../generated/prisma-family/client";
 import { NextResponse } from "next/server";
-import type { AdminContentMediaSummaryDto } from "../../../../../../../../lib/family/admin-contracts";
 import {
   removeStoredFileMaybe,
   saveUploadFile,
   validateUploadFile
 } from "../../../../../../../../lib/server/admin/admin-media-storage";
-import { mapMediaAssetToDto } from "../../../../../../../../lib/server/admin/media-asset-mapper";
+import { buildAdminContentMediaSummaryDto } from "../../../../../../../../lib/server/admin/admin-content-media-summary";
 import { requireAdminApi } from "../../../../../../../../lib/server/auth/require-admin-api";
 import { getFamilyPrisma } from "../../../../../../../../lib/server/db";
 
@@ -57,23 +56,16 @@ export async function POST(
     }
     const oldThumbnailPath = existing.thumbnailPath;
 
-    const updated = await prisma.contentItem.update({
+    await prisma.contentItem.update({
       where: { id: contentItemId },
-      data: { thumbnailPath: saved.publicPath },
-      select: { id: true, posterPath: true, thumbnailPath: true }
+      data: { thumbnailPath: saved.publicPath }
     });
 
-    const video = await prisma.mediaAsset.findFirst({
-      where: { contentItemId },
-      orderBy: { updatedAt: "desc" }
-    });
-
-    const summary: AdminContentMediaSummaryDto = {
-      contentItemId: updated.id,
-      posterPath: updated.posterPath,
-      thumbnailPath: updated.thumbnailPath,
-      videoAsset: video === null ? null : mapMediaAssetToDto(video)
-    };
+    const summary = await buildAdminContentMediaSummaryDto(contentItemId);
+    if (summary === null) {
+      await removeStoredFileMaybe(saved.publicPath);
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
 
     if (oldThumbnailPath !== null && oldThumbnailPath !== saved.publicPath) {
       await removeStoredFileMaybe(oldThumbnailPath);

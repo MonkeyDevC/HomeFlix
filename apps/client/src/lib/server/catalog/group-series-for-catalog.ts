@@ -2,12 +2,13 @@
  * Agrupación de series para carruseles del storefront.
  *
  * Regla de negocio:
- *   - Un `ContentItem.type === "episode"` con al menos una `Collection` asociada
- *     se colapsa bajo la **primera** collection (`ContentItemCollectionLink.position ASC`).
- *   - Todos los episodios que caen bajo la misma collection producen UNA única
- *     `FamilySeriesCardDto`. La fila ya no repite la serie.
+ *   - Un `ContentItem` de tipo `episode` o `photo_gallery` con al menos una
+ *     `Collection` asociada se colapsa bajo la **primera** collection
+ *     (`ContentItemCollectionLink.position ASC`).
+ *   - Todos los ítems de serie que caen bajo la misma collection producen UNA
+ *     única `FamilySeriesCardDto`. La fila ya no repite la serie.
  *   - Movies y clips se emiten como `FamilyStandaloneCardDto` sin tocar.
- *   - Episodios sin collection se emiten como `standalone` (degradación segura).
+ *   - Episodios o galerías sin collection se emiten como `standalone`.
  *
  * El helper es **determinista**: se respeta el orden de entrada. La primera vez
  * que aparece un episodio de una serie, se inserta la `SeriesCard` en esa
@@ -125,10 +126,11 @@ export function groupSeriesForCatalog(
   const result: (FamilyHomeCardDto | null)[] = [];
 
   for (const row of items) {
-    const isEpisode = row.type === "episode";
+    const isSeriesMember =
+      (row.type === "episode" || row.type === "photo_gallery") && row.primaryCollection !== null;
     const col = row.primaryCollection;
 
-    if (!isEpisode || col === null) {
+    if (!isSeriesMember || col === null) {
       result.push(toStandalone(row));
       continue;
     }

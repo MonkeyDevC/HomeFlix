@@ -1,8 +1,5 @@
 import { notFound } from "next/navigation";
-import type {
-  AdminContentMediaSummaryDto,
-  AdminProfileOptionDto
-} from "../../../../../lib/family/admin-contracts";
+import type { AdminProfileOptionDto } from "../../../../../lib/family/admin-contracts";
 import { AdminPageHeader } from "../../../../../components/admin/admin-page-header";
 import { AdminSectionCard } from "../../../../../components/admin/admin-section-card";
 import type { ContentItemFormInitial } from "../../../../../components/admin/content-item-form";
@@ -10,7 +7,7 @@ import { ContentItemForm } from "../../../../../components/admin/content-item-fo
 import { IntegratedMediaSection } from "../../../../../components/admin/integrated-media-section";
 import { ProfileAccessEditor } from "../../../../../components/admin/profile-access-editor";
 import { ReleaseScopeBadge, StatusBadge, VisibilityBadge } from "../../../../../components/admin/status-badges";
-import { mapMediaAssetToDto } from "../../../../../lib/server/admin/media-asset-mapper";
+import { buildAdminContentMediaSummaryDto } from "../../../../../lib/server/admin/admin-content-media-summary";
 import { getFamilyPrisma } from "../../../../../lib/server/db";
 
 export default async function AdminContentEditPage({
@@ -24,7 +21,7 @@ export default async function AdminContentEditPage({
     notFound();
   }
 
-  const [categories, collections, profiles, links, grants, videoAsset] = await Promise.all([
+  const [categories, collections, profiles, links, grants, initialMedia] = await Promise.all([
     prisma.category.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.collection.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.profile.findMany({
@@ -45,7 +42,7 @@ export default async function AdminContentEditPage({
       where: { contentItemId: id },
       select: { profileId: true }
     }),
-    prisma.mediaAsset.findFirst({ where: { contentItemId: id }, orderBy: { updatedAt: "desc" } })
+    buildAdminContentMediaSummaryDto(id)
   ]);
 
   const initial: ContentItemFormInitial = {
@@ -66,6 +63,8 @@ export default async function AdminContentEditPage({
   };
 
   const initialCollectionIds = links.map((l) => l.collectionId);
+  const initialGalleryLinkPosition =
+    item.type === "photo_gallery" && links.length === 1 ? String(links[0]!.position) : undefined;
 
   const profileOptions: AdminProfileOptionDto[] = profiles.map((p) => ({
     displayName: p.displayName,
@@ -76,12 +75,9 @@ export default async function AdminContentEditPage({
 
   const initialProfileIds = grants.map((g) => g.profileId);
 
-  const initialMedia: AdminContentMediaSummaryDto = {
-    contentItemId: item.id,
-    posterPath: item.posterPath,
-    thumbnailPath: item.thumbnailPath,
-    videoAsset: videoAsset === null ? null : mapMediaAssetToDto(videoAsset)
-  };
+  if (initialMedia === null) {
+    notFound();
+  }
 
   return (
     <div>
@@ -109,11 +105,18 @@ export default async function AdminContentEditPage({
             contentId={item.id}
             initial={initial}
             initialCollectionIds={initialCollectionIds}
+            {...(initialGalleryLinkPosition !== undefined
+              ? { initialGalleryLinkPosition }
+              : {})}
             mode="edit"
           />
         </AdminSectionCard>
 
-        <IntegratedMediaSection contentItemId={item.id} initial={initialMedia} />
+        <IntegratedMediaSection
+          contentItemId={item.id}
+          contentType={item.type}
+          initial={initialMedia}
+        />
 
         <AdminSectionCard
           eyebrow="Acceso por perfil"

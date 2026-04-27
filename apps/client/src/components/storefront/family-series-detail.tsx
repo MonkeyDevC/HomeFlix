@@ -2,23 +2,26 @@ import Link from "next/link";
 import type { SeriesDetailDto, SeriesEpisodeDto } from "../../lib/server/catalog/series-detail-for-profile";
 import { formatRuntimeMinutes } from "../../lib/family/playback-time";
 import type { DetailEpisodeDto } from "../../lib/server/catalog/content-detail-related";
-import { EpisodesWithSeasons } from "./episodes-with-seasons";
+import { SeriesContentList } from "./series-content-list";
 
-function formatEpisodeCount(count: number): string {
-  return count === 1 ? "1 episodio" : `${count} episodios`;
+function formatEntryCount(count: number): string {
+  return count === 1 ? "1 entrada" : `${count} entradas`;
 }
 
+type PlayPick =
+  | { mode: "video"; episode: SeriesEpisodeDto; isResume: boolean }
+  | { mode: "gallery"; episode: SeriesEpisodeDto }
+  | null;
+
 /**
- * Elige el episodio "reanudable": primero el que tenga progreso intermedio,
- * si no el primero con media, fallback al primero por posición.
+ * Prioriza reanudar un video; si no hay, el primer video con media; si la serie
+ * solo tiene galerías, el primer álbum con fotos.
  */
-function pickPlayableEpisode(episodes: readonly SeriesEpisodeDto[]): {
-  episode: SeriesEpisodeDto;
-  isResume: boolean;
-} | null {
+function pickPlayableEpisode(episodes: readonly SeriesEpisodeDto[]): PlayPick {
   if (episodes.length === 0) return null;
 
   const inProgress = episodes.find((ep) => {
+    if (ep.type === "photo_gallery") return false;
     if (!ep.hasMedia) return false;
     const progress = ep.progressSeconds;
     const duration = ep.durationSeconds;
@@ -27,15 +30,24 @@ function pickPlayableEpisode(episodes: readonly SeriesEpisodeDto[]): {
     return pct > 0.02 && pct < 0.95;
   });
   if (inProgress !== undefined) {
-    return { episode: inProgress, isResume: true };
+    return { mode: "video", episode: inProgress, isResume: true };
   }
 
-  const firstWithMedia = episodes.find((ep) => ep.hasMedia);
-  if (firstWithMedia !== undefined) {
-    return { episode: firstWithMedia, isResume: false };
+  const firstVideo = episodes.find((ep) => ep.type !== "photo_gallery" && ep.hasMedia);
+  if (firstVideo !== undefined) {
+    return { mode: "video", episode: firstVideo, isResume: false };
   }
 
-  return { episode: episodes[0]!, isResume: false };
+  const firstGallery = episodes.find((ep) => ep.type === "photo_gallery" && ep.hasMedia);
+  if (firstGallery !== undefined) {
+    return { mode: "gallery", episode: firstGallery };
+  }
+
+  const first = episodes[0]!;
+  if (first.type === "photo_gallery") {
+    return { mode: "gallery", episode: first };
+  }
+  return { mode: "video", episode: first, isResume: false };
 }
 
 function toDetailEpisode(ep: SeriesEpisodeDto): DetailEpisodeDto {
@@ -53,6 +65,7 @@ function toDetailEpisode(ep: SeriesEpisodeDto): DetailEpisodeDto {
     durationSeconds: ep.durationSeconds,
     progressSeconds: ep.progressSeconds,
     hasMedia: ep.hasMedia,
+    photoCount: ep.photoCount,
     isCurrent: false
   };
 }
@@ -63,7 +76,7 @@ export function FamilySeriesDetail({
   const { collection, episodes, category } = detail;
   const background = detail.thumbnailPath ?? detail.posterPath;
   const totalRuntime = formatRuntimeMinutes(detail.totalDurationSeconds);
-  const episodeCountLabel = formatEpisodeCount(episodes.length);
+  const entryCountLabel = formatEntryCount(episodes.length);
   const playable = pickPlayableEpisode(episodes);
   const synopsis =
     collection.description !== null && collection.description.trim() !== ""
@@ -100,7 +113,7 @@ export function FamilySeriesDetail({
             {category !== null ? (
               <span className="sf-detail-hero-meta-text">{category.name}</span>
             ) : null}
-            <span className="sf-detail-hero-meta-text">{episodeCountLabel}</span>
+            <span className="sf-detail-hero-meta-text">{entryCountLabel}</span>
             {totalRuntime !== null ? (
               <span className="sf-detail-hero-meta-text">{totalRuntime}</span>
             ) : null}
@@ -115,18 +128,26 @@ export function FamilySeriesDetail({
                 className="sf-detail-btn sf-detail-btn--primary"
                 href={`/c/${encodeURIComponent(playable.episode.slug)}`}
               >
-                <svg aria-hidden="true" height="20" viewBox="0 0 24 24" width="20">
-                  <path d="M8 5v14l11-7z" fill="currentColor" />
-                </svg>
+                {playable.mode === "gallery" ? (
+                  <svg aria-hidden="true" height="20" viewBox="0 0 24 24" width="20" fill="currentColor">
+                    <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
+                  </svg>
+                ) : (
+                  <svg aria-hidden="true" height="20" viewBox="0 0 24 24" width="20">
+                    <path d="M8 5v14l11-7z" fill="currentColor" />
+                  </svg>
+                )}
                 <span>
-                  {playable.isResume
-                    ? `Seguir viendo · ${playable.episode.title}`
-                    : "Ver primer episodio"}
+                  {playable.mode === "gallery"
+                    ? `Abrir álbum · ${playable.episode.title}`
+                    : playable.isResume
+                      ? `Seguir viendo · ${playable.episode.title}`
+                      : "Ver primer episodio"}
                 </span>
               </Link>
             ) : (
               <span className="sf-detail-btn sf-detail-btn--primary is-disabled" aria-disabled="true">
-                Sin episodios disponibles
+                Sin contenido disponible
               </span>
             )}
           </div>
@@ -135,9 +156,10 @@ export function FamilySeriesDetail({
 
       <div className="sf-detail-grid sf-detail-grid--series">
         <div className="sf-detail-main">
-          <EpisodesWithSeasons
+          <SeriesContentList
             episodes={episodes.map(toDetailEpisode)}
             fallbackLabel={collection.name}
+            sectionTitle="Episodios y álbumes"
           />
         </div>
       </div>

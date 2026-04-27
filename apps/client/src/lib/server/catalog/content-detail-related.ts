@@ -4,6 +4,7 @@ import type {
   ContentTypeFamily,
   UserRoleFamily
 } from "../../family/domain-shapes";
+import { familyGalleryPublicPhotoUrl } from "../../family/photo-constants";
 import { getFamilyPrisma } from "../db";
 import { prismaWhereStorefrontVisibleContent } from "./content-storefront-visibility";
 
@@ -21,6 +22,8 @@ export type DetailEpisodeDto = Readonly<{
   durationSeconds: number | null;
   progressSeconds: number | null;
   hasMedia: boolean;
+  /** 0 salvo en `photo_gallery`. */
+  photoCount: number;
   isCurrent: boolean;
 }>;
 
@@ -49,6 +52,7 @@ const siblingSelect = {
   title: true,
   synopsis: true,
   type: true,
+  coverPhotoId: true,
   thumbnailPath: true,
   posterPath: true,
   seasonNumber: true,
@@ -58,15 +62,48 @@ const siblingSelect = {
     orderBy: { updatedAt: "desc" },
     take: 1,
     select: { id: true, durationSeconds: true }
+  },
+  photoAssets: {
+    orderBy: { sortOrder: "asc" as const },
+    take: 1,
+    select: { id: true }
+  },
+  _count: {
+    select: { photoAssets: true }
   }
 } satisfies Prisma.ContentItemSelect;
 
 type SiblingRaw = Prisma.ContentItemGetPayload<{ select: typeof siblingSelect }>;
 
+function cardArtForDetailSibling(
+  item: SiblingRaw
+): { poster: string | null; thumb: string | null } {
+  if (item.type === "photo_gallery") {
+    const n = item._count.photoAssets;
+    if (n < 1) {
+      return { poster: item.posterPath, thumb: item.thumbnailPath };
+    }
+    const cover =
+      item.coverPhotoId !== null
+        ? familyGalleryPublicPhotoUrl(item.coverPhotoId)
+        : item.photoAssets[0] !== undefined
+          ? familyGalleryPublicPhotoUrl(item.photoAssets[0].id)
+          : null;
+    return {
+      poster: item.posterPath ?? item.thumbnailPath ?? cover,
+      thumb: item.thumbnailPath ?? item.posterPath ?? cover
+    };
+  }
+  return { poster: item.posterPath, thumb: item.thumbnailPath };
+}
+
 function sortDetailEpisodesAsc(
   episodes: readonly DetailEpisodeDto[]
 ): readonly DetailEpisodeDto[] {
   return [...episodes].sort((a, b) => {
+    if (a.position !== b.position) {
+      return a.position - b.position;
+    }
     const seasonA = a.seasonNumber ?? Number.POSITIVE_INFINITY;
     const seasonB = b.seasonNumber ?? Number.POSITIVE_INFINITY;
     if (seasonA !== seasonB) return seasonA - seasonB;
@@ -75,7 +112,6 @@ function sortDetailEpisodesAsc(
     const epB = b.episodeNumber ?? Number.POSITIVE_INFINITY;
     if (epA !== epB) return epA - epB;
 
-    if (a.position !== b.position) return a.position - b.position;
     return a.title.localeCompare(b.title);
   });
 }
@@ -172,20 +208,26 @@ export async function getRelatedForContentDetail(
       : collectionLinks.map<DetailEpisodeDto>((link) => {
           const ep = link.contentItem;
           const media = ep.mediaAssets[0] ?? null;
+          const photoCount = ep._count.photoAssets;
+          const isGallery = ep.type === "photo_gallery";
+          const hasVideo = !isGallery && media !== null;
+          const hasGallery = isGallery && photoCount > 0;
+          const art = cardArtForDetailSibling(ep);
           return {
             id: ep.id,
             slug: ep.slug,
             title: ep.title,
             synopsis: ep.synopsis,
             type: ep.type as ContentTypeFamily,
-            thumbnailPath: ep.thumbnailPath,
-            posterPath: ep.posterPath,
+            thumbnailPath: art.thumb,
+            posterPath: art.poster,
             position: link.position,
             seasonNumber: ep.seasonNumber,
             episodeNumber: ep.episodeNumber,
             durationSeconds: media?.durationSeconds ?? null,
             progressSeconds: progressByItemId.get(ep.id) ?? null,
-            hasMedia: media !== null,
+            hasMedia: hasVideo || hasGallery,
+            photoCount,
             isCurrent: ep.id === item.id
           };
         });

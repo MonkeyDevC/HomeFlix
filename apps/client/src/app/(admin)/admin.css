@@ -3186,6 +3186,117 @@
   word-break: break-all;
 }
 
+/* Photo gallery manager */
+.hf-admin-photo-gallery {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hf-space-4);
+}
+
+.hf-admin-photo-dropzone {
+  border: 1.5px dashed var(--hf-admin-border-strong);
+  border-radius: var(--hf-radius-md);
+  padding: var(--hf-space-4);
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.hf-admin-photo-dropzone__label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hf-space-2);
+  cursor: pointer;
+}
+
+.hf-admin-photo-dropzone__title {
+  font-weight: 600;
+  color: #f8fafc;
+  font-size: 0.9rem;
+}
+
+.hf-admin-photo-dropzone__sub {
+  font-size: 0.78rem;
+  color: var(--hf-admin-muted);
+}
+
+.hf-admin-photo-dropzone__status {
+  font-size: 0.82rem;
+  color: var(--hf-admin-fg-soft);
+  margin-top: var(--hf-space-2);
+}
+
+.hf-admin-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: var(--hf-space-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.hf-admin-photo-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hf-space-2);
+  border: 1px solid var(--hf-admin-border);
+  border-radius: var(--hf-radius-md);
+  padding: var(--hf-space-2);
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.hf-admin-photo-tile__frame {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--hf-radius-sm);
+  overflow: hidden;
+  background: #0f172a;
+}
+
+.hf-admin-photo-tile__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.hf-admin-photo-tile__badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #f8fafc;
+}
+
+.hf-admin-photo-tile__meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--hf-admin-muted);
+}
+
+.hf-admin-photo-tile__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hf-admin-photo-tile__actions .hf-admin-secondary-action,
+.hf-admin-photo-tile__actions .hf-admin-danger-action {
+  font-size: 0.72rem;
+  padding: 6px 8px;
+}
+
+.hf-admin-photo-tile__actions button[aria-label] {
+  min-width: 2rem;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
 /* Reduced motion for wizard */
 @media (prefers-reduced-motion: reduce) {
   .hf-admin-wizard__bootstrap-spinner,

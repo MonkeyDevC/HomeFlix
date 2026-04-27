@@ -8,6 +8,7 @@ import { DetailHero } from "./detail-hero";
 import { DetailMetaPanel } from "./detail-meta-panel";
 import type { NextEpisodeInfo } from "./detail-player";
 import { DetailPlayer, DetailPlayerFallback } from "./detail-player";
+import { PhotoGalleryViewer } from "./photo-gallery-viewer";
 
 /**
  * Ordena los episodios de la serie respetando `(seasonNumber, episodeNumber,
@@ -18,13 +19,16 @@ function sortEpisodesForPlayback(
   episodes: readonly DetailEpisodeDto[]
 ): readonly DetailEpisodeDto[] {
   return [...episodes].sort((a, b) => {
+    if (a.position !== b.position) {
+      return a.position - b.position;
+    }
     const seasonA = a.seasonNumber ?? Number.POSITIVE_INFINITY;
     const seasonB = b.seasonNumber ?? Number.POSITIVE_INFINITY;
     if (seasonA !== seasonB) return seasonA - seasonB;
     const epA = a.episodeNumber ?? Number.POSITIVE_INFINITY;
     const epB = b.episodeNumber ?? Number.POSITIVE_INFINITY;
     if (epA !== epB) return epA - epB;
-    return a.position - b.position;
+    return a.title.localeCompare(b.title);
   });
 }
 
@@ -38,6 +42,7 @@ function pickNextEpisode(
   for (let i = idx + 1; i < ordered.length; i++) {
     const candidate = ordered[i];
     if (candidate === undefined) continue;
+    if (candidate.type === "photo_gallery") continue;
     if (!candidate.hasMedia) continue;
     return {
       slug: candidate.slug,
@@ -60,14 +65,23 @@ export function FamilyContentDetail({
   activeProfileName: string;
   resumeProgressSeconds: number | null;
 }>) {
-  const { item, playback } = detail;
-  const canPlay = playback.state === "ready";
+  const { item, playback, photoGallery } = detail;
+  const isPhotoGallery = item.type === "photo_gallery";
+  const canPlay = !isPhotoGallery && playback.state === "ready";
   const durationSeconds =
     playback.state === "ready"
       ? playback.playback.durationSeconds
       : playback.state === "file_missing"
         ? playback.playback.durationSeconds
         : null;
+
+  const firstPhotoUrl =
+    photoGallery !== null && photoGallery.state === "ready" && photoGallery.photos[0] !== undefined
+      ? photoGallery.photos[0].url
+      : null;
+  const heroBackdropUrl = isPhotoGallery
+    ? (item.thumbnailPath ?? item.posterPath ?? firstPhotoUrl)
+    : (item.thumbnailPath ?? item.posterPath);
 
   const series = related.series;
   const showEpisodes = series !== null && series.episodes.length > 0;
@@ -81,6 +95,7 @@ export function FamilyContentDetail({
         canPlay={canPlay}
         durationSeconds={durationSeconds}
         episodesCount={episodesCount}
+        heroBackdropUrl={heroBackdropUrl}
         item={item}
         resumeProgressSeconds={resumeProgressSeconds}
         seriesLabel={seriesLabel}
@@ -88,7 +103,25 @@ export function FamilyContentDetail({
 
       <div className="sf-detail-grid">
         <div className="sf-detail-main">
-          {playback.state === "ready" ? (
+          {isPhotoGallery ? (
+            photoGallery !== null && photoGallery.state === "ready" ? (
+              <div
+                className="sf-detail-player-slot"
+                id="photo-gallery-viewer"
+                tabIndex={-1}
+              >
+                <PhotoGalleryViewer title={item.title} photos={photoGallery.photos} />
+              </div>
+            ) : (
+              <div
+                className="sf-detail-player-slot sf-detail-player-slot--empty"
+                id="photo-gallery-viewer"
+                tabIndex={-1}
+              >
+                <p className="sf-detail-empty-hint">Esta galería aún no tiene fotos visibles.</p>
+              </div>
+            )
+          ) : playback.state === "ready" ? (
             <DetailPlayer
               contentItemId={item.id}
               initialProgressSeconds={resumeProgressSeconds}

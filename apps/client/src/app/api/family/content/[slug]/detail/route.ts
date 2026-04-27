@@ -25,7 +25,8 @@ export async function GET(
       profileId: active.profileId,
       rule: "storefront_visibility_release_scope_profile_access_and_local_media",
       item: detail.item,
-      playback: detail.playback
+      playback: detail.playback,
+      photoGallery: detail.photoGallery
     });
   } catch (error) {
     return serviceUnavailableResponse(error);

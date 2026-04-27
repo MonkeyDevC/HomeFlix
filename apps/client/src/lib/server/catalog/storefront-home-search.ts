@@ -12,6 +12,7 @@ import {
   groupSeriesForCatalog,
   type CatalogItemRaw
 } from "./group-series-for-catalog";
+import { familyGalleryPublicPhotoUrl } from "../../family/photo-constants";
 import {
   getWatchlistContentIdSetForProfile,
   listWatchlistCardsForProfile
@@ -48,6 +49,12 @@ const contentCardSelect = {
       }
     }
   },
+  coverPhotoId: true,
+  photoAssets: {
+    orderBy: { sortOrder: "asc" as const },
+    take: 1,
+    select: { id: true }
+  },
   mediaAssets: {
     where: { status: "ready" },
     orderBy: { updatedAt: "desc" },
@@ -66,13 +73,28 @@ function toRaw(row: ContentCardRaw): CatalogItemRaw {
   const previewAsset = row.mediaAssets[0] ?? null;
   const primaryCollection = row.collectionLinks[0]?.collection ?? null;
 
+  const galleryFallback =
+    row.type === "photo_gallery"
+      ? row.coverPhotoId !== null
+        ? familyGalleryPublicPhotoUrl(row.coverPhotoId)
+        : row.photoAssets[0] !== undefined
+          ? familyGalleryPublicPhotoUrl(row.photoAssets[0].id)
+          : null
+      : null;
+  const posterPath =
+    row.type === "photo_gallery"
+      ? (row.posterPath ?? row.thumbnailPath ?? galleryFallback)
+      : row.posterPath;
+  const thumbnailPath =
+    row.type === "photo_gallery" ? (row.thumbnailPath ?? row.posterPath ?? galleryFallback) : row.thumbnailPath;
+
   return {
     id: row.id,
     slug: row.slug,
     title: row.title,
     synopsis: row.synopsis,
-    posterPath: row.posterPath,
-    thumbnailPath: row.thumbnailPath,
+    posterPath,
+    thumbnailPath,
     type: row.type,
     seasonNumber: row.seasonNumber,
     episodeNumber: row.episodeNumber,

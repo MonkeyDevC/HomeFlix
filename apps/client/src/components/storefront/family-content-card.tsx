@@ -10,6 +10,8 @@ function formatStandaloneTypeLabel(type: string): string {
       return "Episodio";
     case "clip":
       return "Clip";
+    case "photo_gallery":
+      return "Galería";
     default:
       return type;
   }
@@ -75,6 +77,7 @@ export function FamilyContentCard({
       synopsis={item.synopsis}
       title={item.title}
       typeLabel={formatStandaloneTypeLabel(item.type)}
+      badgeLabel={item.type === "photo_gallery" ? "Galería" : undefined}
     />
   );
 }

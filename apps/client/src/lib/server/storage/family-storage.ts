@@ -6,7 +6,7 @@ import { getFamilyStorageRoot } from "../env";
  * Buckets físicos bajo la raíz de storage. Cualquier bucket nuevo debe añadirse aquí
  * para mantener la enumeración cerrada y evitar paths inventados en tiempo de ejecución.
  */
-export type FamilyStorageBucket = "videos" | "posters" | "thumbnails";
+export type FamilyStorageBucket = "videos" | "posters" | "thumbnails" | "photos";
 
 /**
  * Prefijo de URL pública con el que el monolito sirve posters/thumbnails (estáticos de Next.js)

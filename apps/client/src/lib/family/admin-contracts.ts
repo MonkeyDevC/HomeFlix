@@ -43,6 +43,8 @@ export type AdminContentItemDetailDto = Readonly<{
   releaseScope: string;
   visibility: string;
   type: string;
+  /** Solo `photo_gallery`: id de `PhotoAsset` usada como portada (opcional). */
+  coverPhotoId: string | null;
   thumbnailPath: string | null;
   posterPath: string | null;
   categoryId: string | null;
@@ -92,11 +94,27 @@ export type AdminMediaAssetDto = Readonly<{
   updatedAt: string;
 }>;
 
+export type AdminPhotoAssetDto = Readonly<{
+  id: string;
+  filePath: string;
+  mimeType: string;
+  sizeBytes: number | null;
+  width: number | null;
+  height: number | null;
+  sortOrder: number;
+  altText: string | null;
+  createdAt: string;
+  updatedAt: string;
+}>;
+
 export type AdminContentMediaSummaryDto = Readonly<{
   contentItemId: string;
   posterPath: string | null;
   thumbnailPath: string | null;
   videoAsset: AdminMediaAssetDto | null;
+  /** Solo galerías; vacío si no aplica. */
+  photos: readonly AdminPhotoAssetDto[];
+  coverPhotoId: string | null;
 }>;
 
 /** Usuario con credenciales (sin hash). */

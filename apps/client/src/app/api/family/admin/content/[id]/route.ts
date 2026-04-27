@@ -15,6 +15,7 @@ import {
   removeStoredFileMaybe,
   uniqueManagedPublicPaths
 } from "../../../../../../lib/server/admin/admin-media-storage";
+import { assertPhotoGalleryHasPhotosIfPublished } from "../../../../../../lib/server/admin/photo-gallery-rules";
 import { requireAdminApi } from "../../../../../../lib/server/auth/require-admin-api";
 import { getFamilyPrisma } from "../../../../../../lib/server/db";
 
@@ -29,6 +30,7 @@ function mapDetail(c: {
   releaseScope: string;
   visibility: string;
   type: string;
+  coverPhotoId: string | null;
   thumbnailPath: string | null;
   posterPath: string | null;
   categoryId: string | null;
@@ -48,6 +50,7 @@ function mapDetail(c: {
     releaseScope: c.releaseScope,
     visibility: c.visibility,
     type: c.type,
+    coverPhotoId: c.coverPhotoId,
     thumbnailPath: c.thumbnailPath,
     posterPath: c.posterPath,
     categoryId: c.categoryId,
@@ -255,12 +258,56 @@ export async function PATCH(
     data.episodeNumber = e.value;
   }
 
+  if ((body as { coverPhotoId?: unknown }).coverPhotoId !== undefined) {
+    const raw = (body as { coverPhotoId: unknown }).coverPhotoId;
+    if (raw === null) {
+      data.coverPhotoId = null;
+    } else if (typeof raw === "string" && raw.trim() !== "") {
+      data.coverPhotoId = raw.trim();
+    } else {
+      return NextResponse.json({ error: "validation", message: "coverPhotoId inválido." }, { status: 400 });
+    }
+  }
+
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "no_fields" }, { status: 400 });
   }
 
   try {
     const prisma = getFamilyPrisma();
+
+    const before = await prisma.contentItem.findUnique({
+      where: { id },
+      select: { type: true, editorialStatus: true }
+    });
+    if (before === null) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
+
+    const nextType = typeof data.type === "string" ? data.type : before.type;
+    const nextEd =
+      typeof data.editorialStatus === "string" ? data.editorialStatus : before.editorialStatus;
+
+    const pubCheck = await assertPhotoGalleryHasPhotosIfPublished({
+      contentItemId: id,
+      nextType,
+      nextEditorialStatus: nextEd
+    });
+    if (!pubCheck.ok) {
+      return NextResponse.json({ error: "validation", message: pubCheck.message }, { status: 400 });
+    }
+
+    if (typeof data.coverPhotoId === "string") {
+      const ph = await prisma.photoAsset.findFirst({
+        where: { id: data.coverPhotoId, contentItemId: id }
+      });
+      if (ph === null) {
+        return NextResponse.json(
+          { error: "validation", message: "La foto de portada no pertenece a este contenido." },
+          { status: 400 }
+        );
+      }
+    }
 
     if (typeof data.categoryId === "string") {
       const cat = await prisma.category.findUnique({ where: { id: data.categoryId } });
@@ -309,7 +356,8 @@ export async function DELETE(
         id: true,
         posterPath: true,
         thumbnailPath: true,
-        mediaAssets: { select: { filePath: true } }
+        mediaAssets: { select: { filePath: true } },
+        photoAssets: { select: { filePath: true } }
       }
     });
 
@@ -320,7 +368,8 @@ export async function DELETE(
     const pathsToRemove = uniqueManagedPublicPaths([
       existing.posterPath,
       existing.thumbnailPath,
-      ...existing.mediaAssets.map((m) => m.filePath)
+      ...existing.mediaAssets.map((m) => m.filePath),
+      ...existing.photoAssets.map((p) => p.filePath)
     ]);
 
     await prisma.$transaction(async (tx) => {

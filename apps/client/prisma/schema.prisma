@@ -84,10 +84,12 @@ model ContentItem {
   releaseScope     String   @default("public_catalog") @map("release_scope")
   /// private | household | public_internal
   visibility       String   @default("private")
-  /// movie | clip | episode
+  /// movie | clip | episode | photo_gallery
   type             String   @default("movie")
   thumbnailPath    String?  @map("thumbnail_path")
   posterPath       String?  @map("poster_path")
+  /// Para `photo_gallery`: foto usada como portada en cards/hero (opcional; si null, primera por `sortOrder`).
+  coverPhotoId     String?  @unique @map("cover_photo_id") @db.Uuid
   categoryId       String?  @map("category_id") @db.Uuid
   /// Año de estreno (ej. 2024). Decorativo/editorial.
   releaseYear      Int?     @map("release_year")
@@ -102,6 +104,8 @@ model ContentItem {
   category        Category?                   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   collectionLinks ContentItemCollectionLink[]
   mediaAssets     MediaAsset[]
+  photoAssets     PhotoAsset[]                 @relation("ContentItemPhotos")
+  coverPhoto      PhotoAsset?                  @relation("ContentItemCoverPhoto", fields: [coverPhotoId], references: [id], onDelete: SetNull)
   accessGrants    ProfileContentAccess[]
   watchHistory    WatchHistory[]
   watchlistItems  ProfileWatchlistItem[]
@@ -134,6 +138,28 @@ model MediaAsset {
   @@index([contentItemId])
   @@schema("family_v1")
   @@map("media_assets")
+}
+
+/// Foto de una galería (`ContentItem.type = photo_gallery`). Archivo bajo `storage/photos/`.
+model PhotoAsset {
+  id            String   @id @default(uuid()) @db.Uuid
+  contentItemId String   @map("content_item_id") @db.Uuid
+  filePath      String   @map("file_path")
+  mimeType      String   @map("mime_type")
+  sizeBytes     Int?     @map("size_bytes")
+  width         Int?
+  height        Int?
+  sortOrder     Int      @default(0) @map("sort_order")
+  altText       String?  @map("alt_text")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  contentItem ContentItem @relation("ContentItemPhotos", fields: [contentItemId], references: [id], onDelete: Cascade)
+  coverFor    ContentItem? @relation("ContentItemCoverPhoto")
+
+  @@index([contentItemId])
+  @@schema("family_v1")
+  @@map("photo_assets")
 }
 
 model ContentItemCollectionLink {

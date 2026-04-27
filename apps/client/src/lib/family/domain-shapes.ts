@@ -10,7 +10,7 @@ export type EditorialStatusFamily = "draft" | "published" | "archived";
 
 export type ContentVisibilityFamily = "private" | "household" | "public_internal";
 
-export type ContentTypeFamily = "movie" | "clip" | "episode";
+export type ContentTypeFamily = "movie" | "clip" | "episode" | "photo_gallery";
 
 /** Alcance de lanzamiento en storefront (independiente del estado editorial). */
 export type ContentReleaseScopeFamily = "admin_only" | "public_catalog";
@@ -116,7 +116,23 @@ export type LocalPlaybackStateFamily =
   | Readonly<{ state: "asset_unusable"; reason: string }>
   | Readonly<{ state: "file_missing"; reason: string; playback: LocalPlaybackDto }>;
 
+export type PhotoAssetPublicDto = Readonly<{
+  id: string;
+  url: string;
+  sortOrder: number;
+  width: number | null;
+  height: number | null;
+  mimeType: string | null;
+}>;
+
+export type PhotoGalleryStateFamily =
+  | Readonly<{ state: "ready"; photos: readonly PhotoAssetPublicDto[] }>
+  | Readonly<{ state: "empty" }>
+  | null;
+
 export type ContentDetailForProfileFamily = Readonly<{
   item: ContentDetailFamilyDto;
   playback: LocalPlaybackStateFamily;
+  /** Solo `photo_gallery`; imágenes servidas vía proxy autenticado. */
+  photoGallery: PhotoGalleryStateFamily;
 }>;
