@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState, type DragEvent, type MutableRefObject } from "react";
 import type { AdminContentMediaSummaryDto } from "../../lib/family/admin-contracts";
-import { FAMILY_VIDEO_FILE_ACCEPT, FAMILY_VIDEO_FORMAT_LABEL } from "../../lib/family/allowed-video-upload";
+import {
+  FAMILY_VIDEO_FILE_ACCEPT,
+  FAMILY_VIDEO_FORMAT_LABEL,
+  FAMILY_VIDEO_MAX_SIZE_LABEL
+} from "../../lib/family/allowed-video-upload";
 import { validateClientImageUploadRules, validateImageFileForIntent } from "../../lib/admin/image-validation";
 import { adminParseJson } from "../../lib/family/admin-json";
 import { IconFilm, IconSpinner } from "./admin-nav-icons";
@@ -43,7 +47,7 @@ const LABEL_MAP: Record<DropzoneKind, string> = {
 };
 
 const HINT_MAP: Record<DropzoneKind, string> = {
-  video: `${FAMILY_VIDEO_FORMAT_LABEL} · máx. 5 GiB · H.264 en servidor si hace falta (sin pérdida visible)`,
+  video: `${FAMILY_VIDEO_FORMAT_LABEL} · máx. ${FAMILY_VIDEO_MAX_SIZE_LABEL} · H.264 en servidor si hace falta (sin pérdida visible)`,
   poster: "JPG / PNG / WebP · máx. 10 MiB",
   thumbnail: "JPG / PNG / WebP · máx. 10 MiB"
 };

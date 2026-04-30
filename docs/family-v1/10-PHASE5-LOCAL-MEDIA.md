@@ -39,7 +39,7 @@ En `/admin/content/[id]` se agrega sección de media con:
 
 ## Límites y formatos
 
-- Video: `video/mp4` / `video/quicktime`, `.mp4` / `.mov`, máx. 5 GiB.
+- Video: `video/mp4` / `video/quicktime`, `.mp4` / `.mov`, máx. 12 GiB.
 - Imagen (poster/thumbnail): `image/jpeg|png|webp`, `.jpg|.jpeg|.png|.webp`, máx. 10 MiB.
 
 ## Fuera de alcance

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
+import { FAMILY_VIDEO_MAX_SIZE_LABEL } from "../../../../../../../../lib/family/allowed-video-upload";
 import {
   removeStoredFileMaybe,
   saveUploadFile,
@@ -85,7 +86,7 @@ export async function POST(
     return NextResponse.json(
       {
         error: "invalid_form_data",
-        message: "No se pudo leer el formulario. Verifica que el archivo no supere 5 GiB y vuelve a intentarlo."
+        message: `No se pudo leer el formulario. Verifica que el archivo no supere ${FAMILY_VIDEO_MAX_SIZE_LABEL} y vuelve a intentarlo.`
       },
       { status: 400 }
     );

@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, rm, stat, writeFile } from "node:fs/promises";
+import { createWriteStream } from "node:fs";
+import { mkdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import {
+  FAMILY_VIDEO_UPLOAD_MAX_BYTES,
   familyVideoMimeToExtMap,
   inferFamilyVideoMimeType
 } from "../../family/allowed-video-upload";
@@ -21,8 +23,6 @@ type MediaRule = Readonly<{
   allowedMimeToExt: Readonly<Record<string, readonly string[]>>;
 }>;
 
-/** Límite de archivo de video en admin (validación). Alinear proxy/nginx con margen sobre este valor. */
-export const FAMILY_VIDEO_UPLOAD_MAX_BYTES = 5 * 1024 * 1024 * 1024; // 5 GiB
 const VIDEO_MAX_BYTES = FAMILY_VIDEO_UPLOAD_MAX_BYTES;
 const IMAGE_MAX_BYTES = 10 * 1024 * 1024; // 10 MiB
 
@@ -149,9 +149,8 @@ export async function saveUploadFile(file: File, kind: MediaKind): Promise<Media
 
   await mkdir(bucketDir, { recursive: true });
 
-  const bytes = Buffer.from(await file.arrayBuffer());
   const diskPath = path.join(bucketDir, baseName);
-  await writeFile(diskPath, bytes);
+  await writeBrowserFileToDisk(file, diskPath);
 
   const mimeType =
     kind === "video" ? inferFamilyVideoMimeType(file.type, ext) : file.type.toLowerCase().trim();
@@ -163,6 +162,44 @@ export async function saveUploadFile(file: File, kind: MediaKind): Promise<Media
     publicPath: toPublicStoragePath(rule.bucket, baseName),
     sizeBytes: file.size
   };
+}
+
+async function writeBrowserFileToDisk(file: File, diskPath: string): Promise<void> {
+  const reader = file.stream().getReader();
+  const out = createWriteStream(diskPath);
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value === undefined || value.byteLength === 0) continue;
+
+      await new Promise<void>((resolve, reject) => {
+        out.write(Buffer.from(value), (err) => {
+          if (err !== undefined) {
+            reject(err);
+            return;
+          }
+          resolve();
+        });
+      });
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      out.end((err?: Error | null) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve();
+      });
+    });
+  } catch (error) {
+    out.destroy();
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 /**

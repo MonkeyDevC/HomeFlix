@@ -12,12 +12,16 @@ export const FAMILY_ALLOWED_VIDEO_MIME_TYPES = [
 
 export const FAMILY_ALLOWED_VIDEO_EXTENSIONS = [".mp4", ".mov"] as const;
 
+/** Límite de subida en admin para videos largos. */
+export const FAMILY_VIDEO_UPLOAD_MAX_BYTES = 12 * 1024 * 1024 * 1024; // 12 GiB
+
 /** Valor del atributo `accept` en inputs de archivo de video. */
 export const FAMILY_VIDEO_FILE_ACCEPT =
   "video/mp4,video/quicktime,video/x-quicktime,.mp4,.mov" as const;
 
 /** Texto corto para hints de UI (admin). */
 export const FAMILY_VIDEO_FORMAT_LABEL = "MP4 / MOV" as const;
+export const FAMILY_VIDEO_MAX_SIZE_LABEL = "12 GiB" as const;
 
 /** Aviso storefront: contenedor QuickTime puede fallar según navegador/códec. */
 export const FAMILY_MOV_PLAYBACK_COMPAT_HINT =

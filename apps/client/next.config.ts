@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
+import { FAMILY_VIDEO_UPLOAD_MAX_BYTES } from "./src/lib/family/allowed-video-upload";
 
 /** Debe coincidir con `FAMILY_VIDEO_UPLOAD_MAX_BYTES` en `admin-media-storage.ts`. */
-const FAMILY_VIDEO_UPLOAD_MAX_BYTES = 5 * 1024 * 1024 * 1024;
 /** Mismo margen relativo que antes (310/300) sobre el tope en MiB. */
 const MAX_UPLOAD_MB = Math.ceil((FAMILY_VIDEO_UPLOAD_MAX_BYTES / (1024 * 1024)) * (310 / 300));
 const MAX_UPLOAD_BODY_SIZE = `${MAX_UPLOAD_MB}mb`;
