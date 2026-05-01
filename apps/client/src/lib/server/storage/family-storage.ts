@@ -14,16 +14,40 @@ export type FamilyStorageBucket = "videos" | "posters" | "thumbnails" | "photos"
  */
 export const FAMILY_STORAGE_URL_PREFIX = "/storage/";
 
+/** Directorio del monolito Next (`apps/client`), útil cuando `process.cwd()` es la raíz del repo. */
+function resolveNextAppRootForRelativePaths(): string {
+  const cwd = process.cwd();
+  if (nextConfigExistsInDir(cwd)) {
+    return cwd;
+  }
+  const nested = path.join(cwd, "apps", "client");
+  if (nextConfigExistsInDir(nested)) {
+    return nested;
+  }
+  return cwd;
+}
+
+function nextConfigExistsInDir(dir: string): boolean {
+  return (
+    existsSync(path.join(dir, "next.config.ts")) ||
+    existsSync(path.join(dir, "next.config.mjs")) ||
+    existsSync(path.join(dir, "next.config.js"))
+  );
+}
+
 /**
  * Resuelve la raíz absoluta del almacenamiento de media. Lee `FAMILY_STORAGE_ROOT`:
- * si la ruta es relativa, se interpreta contra `process.cwd()` (default `public/storage`,
- * que mantiene compatibilidad con el servicio estático de Next.js bajo `public/`).
+ * si la ruta es relativa, se interpreta contra el directorio de la app Next (donde está
+ * `next.config.*`), no solo `process.cwd()`: en monorepos es habitual arrancar con cwd
+ * en la raíz del repo y los archivos reales viven en `apps/client/public/storage`.
  */
 export function resolveStorageRoot(): string {
   const configured = getFamilyStorageRoot();
-  return path.isAbsolute(configured)
-    ? path.normalize(configured)
-    : path.normalize(path.resolve(/*turbopackIgnore: true*/ process.cwd(), configured));
+  if (path.isAbsolute(configured)) {
+    return path.normalize(configured);
+  }
+  const base = resolveNextAppRootForRelativePaths();
+  return path.normalize(path.resolve(base, configured));
 }
 
 export function resolveBucketDir(bucket: FamilyStorageBucket): string {
@@ -40,7 +64,15 @@ export function resolveStorageDiskPath(publicPath: string | null | undefined): s
   if (publicPath === undefined || publicPath === null) {
     return null;
   }
-  const trimmed = publicPath.trim();
+  let trimmed = publicPath.trim();
+  if (trimmed === "") {
+    return null;
+  }
+  // Aceptar valores legacy sin barra inicial (`storage/videos/...`) para borrado y comprobaciones.
+  const noLeading = trimmed.replace(/^\/+/, "");
+  if (noLeading.startsWith("storage/")) {
+    trimmed = `/${noLeading}`;
+  }
   if (!trimmed.startsWith(FAMILY_STORAGE_URL_PREFIX)) {
     return null;
   }
