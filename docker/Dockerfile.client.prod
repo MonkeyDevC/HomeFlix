@@ -118,11 +118,11 @@ USER homeflix
 
 EXPOSE 3000
 
-# Healthcheck contra el endpoint anónimo /api/family/healthz.
-# Usamos wget (ya instalado) para no depender de curl.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
-  CMD wget -q -O /dev/null --tries=1 --timeout=4 \
-      "http://127.0.0.1:${PORT}/api/family/healthz" || exit 1
+# Healthcheck contra /api/family/healthz (liveness). Puerto fijo 3000 = mismo default
+# que `PORT` en compose; docker-compose.prod.yml puede sobreescribir este check.
+HEALTHCHECK --interval=30s --timeout=8s --start-period=120s --retries=5 \
+  CMD wget -q -O /dev/null --tries=1 --timeout=5 \
+      "http://127.0.0.1:3000/api/family/healthz" || exit 1
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/homeflix-entrypoint"]
 CMD ["pnpm", "--filter", "@homeflix/client", "start"]

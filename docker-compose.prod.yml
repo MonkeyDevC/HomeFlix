@@ -54,7 +54,8 @@ services:
       # Prisma + app
       DATABASE_URL: "${DATABASE_URL:?DATABASE_URL requerido}"
       FAMILY_JWT_SECRET: "${FAMILY_JWT_SECRET:?FAMILY_JWT_SECRET requerido (min 32 chars)}"
-      FAMILY_STORAGE_ROOT: "${FAMILY_STORAGE_ROOT:-public/storage}"
+      # Debe coincidir con el mount de `homeflix-media` (misma ruta absoluta en el client).
+      FAMILY_STORAGE_ROOT: "${FAMILY_STORAGE_ROOT:-/repo/apps/client/public/storage}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
     volumes:
       # Persistencia de media (videos, posters, thumbnails). Montamos el volumen
@@ -66,8 +67,24 @@ services:
       - "3000"
     networks:
       - homeflix-internal
-    # El HEALTHCHECK vive en el Dockerfile (golpea /api/family/healthz); con eso
-    # `depends_on: { condition: service_healthy }` de nginx funciona correctamente.
+    # Sobreescribe el HEALTHCHECK de la imagen: puerto explícito (evita sustitución
+    # rara de ${PORT} en build) y más margen en cold start (migrate + next start).
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "-q",
+          "-O",
+          "/dev/null",
+          "--tries=1",
+          "--timeout=5",
+          "http://127.0.0.1:3000/api/family/healthz"
+        ]
+      interval: 20s
+      timeout: 10s
+      retries: 6
+      start_period: 180s
 
   nginx:
     image: nginx:1.27-alpine
