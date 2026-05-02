@@ -4,7 +4,7 @@
 # Responsabilidades:
 #   1. Validar que las variables mínimas estén definidas (fail-fast claro).
 #   2. Aplicar migraciones Prisma en forma idempotente (`migrate deploy`).
-#   3. Ejecutar el comando recibido (por defecto `next start`).
+#   3. Ejecutar el comando recibido (por defecto `pnpm --filter @homeflix/client start` → server.mjs).
 #
 # El script es intencionalmente POSIX (`/bin/sh`) para que funcione tanto en
 # `debian-slim` como en imágenes alpine si alguien cambia la base en el futuro.

@@ -6,16 +6,16 @@
 #   - Base Debian slim (glibc) para evitar la incompatibilidad conocida de
 #     `ffmpeg-static` / `ffprobe-static` con musl (Alpine).
 #   - Dos etapas: builder (compila workspace + Next.js) y runner (solo lo
-#     necesario para `next start`).
+#     necesario para `node server.mjs` / Next handler).
 #   - Prisma 7 necesita OpenSSL presente en runtime (no viene en debian-slim por
 #     defecto): lo instalamos en ambas etapas.
 #   - `ffmpeg-static` trae sus binarios glibc-linux-x64/arm64 y sirven en
 #     Debian; además instalamos el paquete `ffmpeg` del sistema como fallback
 #     (costo bajo y mayor robustez si el static falla en alguna arquitectura).
 #   - Usuario `homeflix` (uid/gid 1001) no-root para el runtime.
-#   - `tini` como PID 1 para propagar señales a `next start` y dejar que los
+#   - `tini` como PID 1 para propagar señales al proceso Node y dejar que los
 #     streams (`ffmpeg`, uploads largas) cierren limpiamente al reiniciar.
-#   - El entrypoint ejecuta `prisma migrate deploy` antes de `next start`
+#   - El entrypoint ejecuta `prisma migrate deploy` antes del servidor Next
 #     (idempotente; si no hay migraciones pendientes es un no-op).
 
 ARG NODE_IMAGE=node:22-bookworm-slim
@@ -94,7 +94,7 @@ RUN apt-get update \
 WORKDIR /repo
 
 # Copiamos el workspace ya compilado desde el builder. Mantener `node_modules`
-# permite que `prisma migrate deploy` y `next start` encuentren binarios y
+# permite que `prisma migrate deploy` y el arranque (`pnpm start`) encuentren binarios y
 # módulos sin reinstalar.
 COPY --from=builder --chown=homeflix:homeflix /repo /repo
 
