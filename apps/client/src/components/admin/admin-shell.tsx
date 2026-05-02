@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { AdminBreadcrumb } from "./admin-breadcrumb";
 import { AdminNav } from "./admin-nav";
+import { AdminUserMenu } from "./admin-user-menu";
 
 export function AdminShell({
   children,
@@ -22,10 +23,7 @@ export function AdminShell({
               <AdminBreadcrumb />
             </div>
             <div className="hf-admin-topbar-trail">
-              <span className="hf-admin-user-chip" title={userEmail}>
-                <span className="hf-admin-user-avatar">{userInitials}</span>
-                <span>{userEmail}</span>
-              </span>
+              <AdminUserMenu userEmail={userEmail} userInitials={userInitials} />
             </div>
           </header>
           <main className="hf-admin-main">{children}</main>
