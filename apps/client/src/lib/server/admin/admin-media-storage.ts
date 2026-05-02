@@ -2,6 +2,9 @@ import { randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
 import { mkdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
+import type { Readable } from "node:stream";
+import { Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import {
   FAMILY_VIDEO_UPLOAD_MAX_BYTES,
   familyVideoMimeToExtMap,
@@ -75,8 +78,66 @@ function formatMaxBytesLabel(maxBytes: number): string {
   return `${Math.round(maxBytes / (1024 * 1024))} MiB`;
 }
 
-export function validateUploadFile(
-  file: File,
+/** Metadatos mínimos equivalentes a `File` para validación sin bufferizar el cuerpo. */
+export type UploadLike = Readonly<{
+  name: string;
+  type: string;
+  size: number;
+}>;
+
+/** Valida nombre + MIME/extensión sin mirar el tamaño (útil antes de streaming). */
+export function validateUploadShape(
+  fileName: string,
+  clientMime: string,
+  kind: MediaKind
+): { ok: true; ext: string; mime: string } | { ok: false; code: string; message: string } {
+  const rule = RULES[kind];
+  const ext = normalizeExt(fileName);
+  const mime =
+    kind === "video" ? inferFamilyVideoMimeType(clientMime, ext) : clientMime.toLowerCase().trim();
+
+  const allowedExt = rule.allowedMimeToExt[mime];
+  if (allowedExt === undefined) {
+    if (kind === "video") {
+      console.warn("[homeflix:media-upload]", "invalid_mime", {
+        mime: mime || "(vacío)",
+        ext,
+        declaredType: clientMime
+      });
+    }
+    return {
+      ok: false,
+      code: "invalid_mime",
+      message:
+        kind === "video"
+          ? `Formato no permitido. Usa MP4 o MOV. (recibido: ${mime || "sin MIME"})`
+          : `MIME no permitido para ${kind}: ${mime || "(vacío)"}.`
+    };
+  }
+
+  if (!allowedExt.includes(ext)) {
+    if (kind === "video") {
+      console.warn("[homeflix:media-upload]", "invalid_extension", {
+        ext: ext || "(sin extensión)",
+        mime,
+        declaredType: clientMime
+      });
+    }
+    return {
+      ok: false,
+      code: "invalid_extension",
+      message:
+        kind === "video"
+          ? `Formato no permitido. Usa MP4 o MOV. (extensión: ${ext || "sin extensión"})`
+          : `Extensión no permitida para ${kind}: ${ext || "(sin extensión)"}.`
+    };
+  }
+
+  return { ok: true, ext, mime };
+}
+
+export function validateUploadLike(
+  file: UploadLike,
   kind: MediaKind
 ): { ok: true } | { ok: false; code: string; message: string } {
   const rule = RULES[kind];
@@ -140,6 +201,13 @@ export function validateUploadFile(
   return { ok: true };
 }
 
+export function validateUploadFile(
+  file: File,
+  kind: MediaKind
+): { ok: true } | { ok: false; code: string; message: string } {
+  return validateUploadLike({ name: file.name, type: file.type, size: file.size }, kind);
+}
+
 export async function saveUploadFile(file: File, kind: MediaKind): Promise<MediaUploadSuccess> {
   const rule = RULES[kind];
   const ext = normalizeExt(file.name);
@@ -161,6 +229,82 @@ export async function saveUploadFile(file: File, kind: MediaKind): Promise<Media
     mimeType,
     publicPath: toPublicStoragePath(rule.bucket, baseName),
     sizeBytes: file.size
+  };
+}
+
+/**
+ * Graba un video multipart como stream a disco (sin `request.formData()` ni `File` en memoria).
+ * Valida forma (nombre/MIME) antes de escribir; tamaño y reglas finales tras `stat`.
+ */
+export async function saveVideoUploadFromStream(
+  source: Readable,
+  meta: Readonly<{ filename: string; mimeType: string }>
+): Promise<MediaUploadSuccess> {
+  const shape = validateUploadShape(meta.filename, meta.mimeType, "video");
+  if (!shape.ok) {
+    source.resume();
+    const err = new Error(shape.message) as NodeJS.ErrnoException;
+    err.code = shape.code;
+    throw err;
+  }
+
+  const ext = shape.ext;
+  const rule = RULES.video;
+  const baseName = `${Date.now()}-${randomUUID()}${ext}`;
+  const bucketDir = resolveBucketDir(rule.bucket);
+  await mkdir(bucketDir, { recursive: true });
+  const diskPath = path.join(bucketDir, baseName);
+
+  let written = 0;
+  const guard = new Transform({
+    transform(chunk, _enc, cb) {
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
+      written += buf.length;
+      if (written > VIDEO_MAX_BYTES) {
+        const err = new Error("Archivo demasiado grande.") as NodeJS.ErrnoException;
+        err.code = "max_size_exceeded";
+        cb(err);
+        return;
+      }
+      cb(null, buf);
+    }
+  });
+
+  const out = createWriteStream(diskPath);
+
+  try {
+    await pipeline(source, guard, out);
+  } catch (err) {
+    await rm(diskPath, { force: true }).catch(() => {
+      /* ignore */
+    });
+    throw err;
+  }
+
+  const st = await stat(diskPath);
+  const sizeBytes = st.size;
+
+  const post = validateUploadLike(
+    { name: meta.filename, type: meta.mimeType, size: sizeBytes },
+    "video"
+  );
+  if (!post.ok) {
+    await rm(diskPath, { force: true }).catch(() => {
+      /* ignore */
+    });
+    const err = new Error(post.message) as NodeJS.ErrnoException;
+    err.code = post.code;
+    throw err;
+  }
+
+  const mimeType = inferFamilyVideoMimeType(meta.mimeType, ext);
+
+  return {
+    bucket: rule.bucket,
+    diskPath,
+    mimeType,
+    publicPath: toPublicStoragePath(rule.bucket, baseName),
+    sizeBytes
   };
 }
 

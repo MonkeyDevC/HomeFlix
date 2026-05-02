@@ -5,11 +5,10 @@ import { NextResponse } from "next/server";
 import { FAMILY_VIDEO_MAX_SIZE_LABEL } from "../../../../../../../../lib/family/allowed-video-upload";
 import {
   removeStoredFileMaybe,
-  saveUploadFile,
-  validateUploadFile
+  type MediaUploadSuccess
 } from "../../../../../../../../lib/server/admin/admin-media-storage";
 import { buildAdminContentMediaSummaryDto } from "../../../../../../../../lib/server/admin/admin-content-media-summary";
-import { mapMediaAssetToDto } from "../../../../../../../../lib/server/admin/media-asset-mapper";
+import { parseVideoMultipartToDisk } from "../../../../../../../../lib/server/admin/parse-video-upload-multipart";
 import {
   isBrowserFriendlyCodec,
   probeVideo
@@ -64,10 +63,6 @@ export const runtime = "nodejs";
  */
 export const maxDuration = 900;
 
-function noFileResponse() {
-  return NextResponse.json({ error: "file_required", message: "Debes adjuntar el campo file." }, { status: 400 });
-}
-
 export async function POST(
   request: Request,
   ctx: { params: Promise<{ id: string }> }
@@ -79,43 +74,40 @@ export async function POST(
 
   const { id: contentItemId } = await ctx.params;
 
-  let form: FormData;
-  try {
-    form = await request.formData();
-  } catch {
-    return NextResponse.json(
-      {
-        error: "invalid_form_data",
-        message: `No se pudo leer el formulario. Verifica que el archivo no supere ${FAMILY_VIDEO_MAX_SIZE_LABEL} y vuelve a intentarlo.`
-      },
-      { status: 400 }
-    );
-  }
+  console.info("[homeflix:video-upload]", "request_start", {
+    contentItemId,
+    contentType: request.headers.get("content-type"),
+    contentLength: request.headers.get("content-length")
+  });
 
-  const candidate = form.get("file");
-  if (!(candidate instanceof File)) {
-    return noFileResponse();
-  }
-  const validation = validateUploadFile(candidate, "video");
-  if (!validation.ok) {
-    console.warn("[homeflix:video-upload]", "validation_rejected", {
-      code: validation.code,
-      message: validation.message,
-      name: candidate.name,
-      type: candidate.type
+  const parsed = await parseVideoMultipartToDisk(request);
+
+  if (!parsed.ok) {
+    console.warn("[homeflix:video-upload]", "multipart_parse_client_error", {
+      contentItemId,
+      status: parsed.status,
+      error: parsed.error,
+      message: parsed.message
     });
     return NextResponse.json(
-      { error: validation.code, message: validation.message },
-      { status: 400 }
+      { error: parsed.error, message: parsed.message },
+      { status: parsed.status }
     );
   }
 
-  let saved: Awaited<ReturnType<typeof saveUploadFile>> | null = null;
-  try {
-    saved = await saveUploadFile(candidate, "video");
+  let saved: MediaUploadSuccess = parsed.saved;
 
+  console.info("[homeflix:video-upload]", "stream_saved", {
+    contentItemId,
+    sizeBytes: saved.sizeBytes,
+    publicPath: saved.publicPath,
+    mimeType: saved.mimeType
+  });
+
+  try {
     if (path.extname(saved.diskPath).toLowerCase() === ".mov") {
       console.info("[homeflix:video-upload]", "mov_normalize_start", {
+        contentItemId,
         publicPath: saved.publicPath
       });
       try {
@@ -129,12 +121,20 @@ export async function POST(
           mimeType: "video/mp4",
           sizeBytes: Number(st.size)
         };
+        console.info("[homeflix:video-upload]", "mov_normalize_done", {
+          contentItemId,
+          publicPath: saved.publicPath,
+          sizeBytes: saved.sizeBytes
+        });
       } catch (movErr) {
         await removeStoredFileMaybe(saved.publicPath);
         const message = movErr instanceof Error ? movErr.message : "mov_to_mp4_failed";
         console.error("[homeflix:video-upload]", "mov_normalize_failed", {
+          contentItemId,
           publicPath: saved.publicPath,
-          message
+          message,
+          stack: movErr instanceof Error ? movErr.stack : null,
+          movErr
         });
         return NextResponse.json(
           {
@@ -146,10 +146,17 @@ export async function POST(
       }
     }
 
-    // Inspección de metadatos: solo rechazamos si el archivo no es un video
-    // legible. Si lo es, capturamos codec/res/fps/duración para decidir si
-    // hay que transcodificar.
+    console.info("[homeflix:video-upload]", "probe_start", {
+      contentItemId,
+      diskPath: saved.diskPath
+    });
     const probe = await probeVideo(saved.diskPath);
+    console.info("[homeflix:video-upload]", "probe_done", {
+      contentItemId,
+      ok: probe.ok,
+      codec: probe.ok ? probe.metadata.codec : probe.code
+    });
+
     if (!probe.ok) {
       await removeStoredFileMaybe(saved.publicPath);
       return NextResponse.json(
@@ -161,23 +168,27 @@ export async function POST(
     let metadata = probe.metadata;
     let finalSizeBytes = saved.sizeBytes;
 
-    // Si el códec original no se decodifica bien en navegadores mainstream
-    // (AV1, HEVC, etc.), re-encodeamos a H.264/AAC en el servidor. Esto
-    // mantiene la calidad visual (crf 18) y garantiza que el video se
-    // reproduzca en cualquier dispositivo familiar.
     if (!isBrowserFriendlyCodec(metadata.codec)) {
       try {
         console.info("[homeflix:video-upload]", "h264_transcode_start", {
+          contentItemId,
           publicPath: saved.publicPath,
           codec: metadata.codec
         });
         await transcodeToH264InPlace(saved.diskPath);
+        console.info("[homeflix:video-upload]", "h264_transcode_done", {
+          contentItemId,
+          publicPath: saved.publicPath
+        });
       } catch (transcodeErr) {
         await removeStoredFileMaybe(saved.publicPath);
         const message = transcodeErr instanceof Error ? transcodeErr.message : "transcode_failed";
         console.error("[homeflix:video-upload]", "h264_transcode_failed", {
+          contentItemId,
           publicPath: saved.publicPath,
-          message
+          message,
+          stack: transcodeErr instanceof Error ? transcodeErr.stack : null,
+          transcodeErr
         });
         return NextResponse.json(
           {
@@ -188,8 +199,6 @@ export async function POST(
         );
       }
 
-      // Tras el transcode, volvemos a leer metadatos (codec nuevo = h264,
-      // y potencialmente duración/fps ajustados por ffmpeg).
       const reprobed = await probeVideo(saved.diskPath);
       if (reprobed.ok) {
         metadata = reprobed.metadata;
@@ -199,9 +208,11 @@ export async function POST(
         const st = await stat(saved.diskPath);
         finalSizeBytes = st.size;
       } catch {
-        /* dejamos el tamaño original; no es bloqueante */
+        /* dejamos el tamaño anterior */
       }
     }
+
+    console.info("[homeflix:video-upload]", "prisma_start", { contentItemId });
 
     const prisma = getFamilyPrisma();
 
@@ -253,12 +264,10 @@ export async function POST(
       await removeStoredFileMaybe(previous.filePath);
     }
 
-    // Si el contenido no tiene thumb/poster, generamos una portada automática
-    // a partir de un frame del video. Así los episodios subidos sin imagen
-    // manual dejan de mostrarse con recuadro negro en /c/[slug] y carruseles.
     let finalThumbnail = content.thumbnailPath;
     let finalPoster = content.posterPath;
     if (finalThumbnail === null || finalPoster === null) {
+      console.info("[homeflix:video-upload]", "auto_thumbnail_start", { contentItemId });
       const generatedPath = await ensureAutoThumbnail(
         saved.diskPath,
         metadata.durationSeconds
@@ -280,6 +289,10 @@ export async function POST(
           });
         }
       }
+      console.info("[homeflix:video-upload]", "auto_thumbnail_done", {
+        contentItemId,
+        generatedPath
+      });
     }
 
     const summary = await buildAdminContentMediaSummaryDto(contentItemId);
@@ -287,12 +300,28 @@ export async function POST(
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
 
+    console.info("[homeflix:video-upload]", "upload_ok", {
+      contentItemId,
+      mediaAssetId: video.id,
+      publicPath: saved.publicPath
+    });
+
     return NextResponse.json({ item: summary }, { status: 201 });
   } catch (error) {
-    if (saved !== null) {
-      await removeStoredFileMaybe(saved.publicPath);
-    }
+    await removeStoredFileMaybe(saved.publicPath);
     const message = error instanceof Error ? error.message : "upload_failed";
-    return NextResponse.json({ error: "upload_failed", message }, { status: 503 });
+    console.error("[homeflix:video-upload]", "upload_failed", {
+      contentItemId,
+      message,
+      stack: error instanceof Error ? error.stack : null,
+      error
+    });
+    return NextResponse.json(
+      {
+        error: "upload_failed",
+        message: `Error al procesar el video: ${message}. Si el fallo fue al leer el formulario, verificá que el archivo no supere ${FAMILY_VIDEO_MAX_SIZE_LABEL}.`
+      },
+      { status: 503 }
+    );
   }
 }
