@@ -7,7 +7,7 @@ import {
   FAMILY_VIDEO_FORMAT_LABEL,
   FAMILY_VIDEO_MAX_SIZE_LABEL
 } from "../../lib/family/allowed-video-upload";
-import { validateClientImageUploadRules, validateImageFileForIntent } from "../../lib/admin/image-validation";
+import { validateClientImageUploadRules } from "../../lib/admin/image-validation";
 import { adminParseJson } from "../../lib/family/admin-json";
 import { IconFilm, IconSpinner } from "./admin-nav-icons";
 import { ImageReviewCard } from "./image-review-card";
@@ -209,15 +209,6 @@ export function MediaDropzoneCard({
       const rules = validateClientImageUploadRules(file);
       if (!rules.ok) {
         setError(rules.message);
-        return;
-      }
-      const pre = await validateImageFileForIntent(kind, file);
-      if ("error" in pre) {
-        setError(pre.error);
-        return;
-      }
-      if (!pre.isValid) {
-        setError(pre.warnings[0] ?? "La imagen no cumple el mínimo para este uso.");
         return;
       }
     }

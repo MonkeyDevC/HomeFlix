@@ -105,8 +105,6 @@ export function ContentCreateWizard({ categories, collections, profiles, preset 
   );
 
   const [media, setMedia] = useState<AdminContentMediaSummaryDto | null>(null);
-  const [posterMediaGate, setPosterMediaGate] = useState(true);
-  const [thumbnailMediaGate, setThumbnailMediaGate] = useState(true);
 
   const [title, setTitle] = useState("");
   const [synopsis, setSynopsis] = useState("");
@@ -225,18 +223,6 @@ export function ContentCreateWizard({ categories, collections, profiles, preset 
     };
   }, [contentId, step, type]);
 
-  useEffect(() => {
-    if (media?.posterPath === null || media?.posterPath === undefined) {
-      setPosterMediaGate(true);
-    }
-  }, [media?.posterPath]);
-
-  useEffect(() => {
-    if (media?.thumbnailPath === null || media?.thumbnailPath === undefined) {
-      setThumbnailMediaGate(true);
-    }
-  }, [media?.thumbnailPath]);
-
   function toggleProfile(profileId: string) {
     setSelectedProfileIds((prev) =>
       prev.includes(profileId) ? prev.filter((id) => id !== profileId) : [...prev, profileId]
@@ -248,25 +234,6 @@ export function ContentCreateWizard({ categories, collections, profiles, preset 
       return { ok: true };
     }
     if (step === 2) {
-      if (type === "photo_gallery") {
-        return { ok: true };
-      }
-      const posterPath = media?.posterPath ?? null;
-      const thumbPath = media?.thumbnailPath ?? null;
-      if (posterPath !== null && !posterMediaGate) {
-        return {
-          ok: false,
-          message:
-            "Revisá el poster: corregí una imagen inválida o aceptá las advertencias antes de continuar."
-        };
-      }
-      if (thumbPath !== null && !thumbnailMediaGate) {
-        return {
-          ok: false,
-          message:
-            "Revisá el thumbnail: corregí una imagen inválida o aceptá las advertencias antes de continuar."
-        };
-      }
       return { ok: true };
     }
     if (step === 3) {
@@ -488,8 +455,6 @@ export function ContentCreateWizard({ categories, collections, profiles, preset 
             contentId={contentId}
             media={media}
             onMediaChange={setMedia}
-            onPosterGateChange={setPosterMediaGate}
-            onThumbnailGateChange={setThumbnailMediaGate}
             videoQualityLabel={videoQualityLabel}
           />
         ) : null}
@@ -657,16 +622,12 @@ function StepMedia({
   contentId,
   media,
   onMediaChange,
-  onPosterGateChange,
-  onThumbnailGateChange,
   videoQualityLabel
 }: Readonly<{
   type: ContentKind;
   contentId: string | null;
   media: AdminContentMediaSummaryDto | null;
   onMediaChange: (m: AdminContentMediaSummaryDto) => void;
-  onPosterGateChange: (ok: boolean) => void;
-  onThumbnailGateChange: (ok: boolean) => void;
   videoQualityLabel: string | null;
 }>) {
   const disabledReason = contentId === null ? "Preparando borrador…" : null;
@@ -725,7 +686,6 @@ function StepMedia({
             currentPath={media?.posterPath ?? null}
             onUploaded={onMediaChange}
             disabledReason={disabledReason}
-            onImageReviewGate={onPosterGateChange}
           />
           <MediaDropzoneCard
             kind="thumbnail"
@@ -734,7 +694,6 @@ function StepMedia({
             currentPath={media?.thumbnailPath ?? null}
             onUploaded={onMediaChange}
             disabledReason={disabledReason}
-            onImageReviewGate={onThumbnailGateChange}
           />
         </div>
       </div>

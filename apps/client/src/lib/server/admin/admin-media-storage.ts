@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
-import { mkdir, rm, stat } from "node:fs/promises";
+import { mkdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Readable } from "node:stream";
 import { Transform } from "node:stream";
@@ -28,6 +28,9 @@ type MediaRule = Readonly<{
 
 const VIDEO_MAX_BYTES = FAMILY_VIDEO_UPLOAD_MAX_BYTES;
 const IMAGE_MAX_BYTES = 10 * 1024 * 1024; // 10 MiB
+
+/** Límite de poster/thumbnail (multipart en buffer); alineado con `lib/admin/image-validation`. */
+export const FAMILY_IMAGE_UPLOAD_MAX_BYTES = IMAGE_MAX_BYTES;
 
 const RULES: Readonly<Record<MediaKind, MediaRule>> = {
   video: {
@@ -206,6 +209,41 @@ export function validateUploadFile(
   kind: MediaKind
 ): { ok: true } | { ok: false; code: string; message: string } {
   return validateUploadLike({ name: file.name, type: file.type, size: file.size }, kind);
+}
+
+/** Poster/thumbnail desde buffer (sin `File` ni `request.formData()`). */
+export async function saveImageUploadFromBuffer(
+  buffer: Buffer,
+  meta: Readonly<{ filename: string; mimeType: string }>,
+  kind: "poster" | "thumbnail"
+): Promise<MediaUploadSuccess> {
+  const validation = validateUploadLike(
+    { name: meta.filename, type: meta.mimeType, size: buffer.length },
+    kind
+  );
+  if (!validation.ok) {
+    const err = new Error(validation.message) as NodeJS.ErrnoException;
+    err.code = validation.code;
+    throw err;
+  }
+
+  const rule = RULES[kind];
+  const ext = normalizeExt(meta.filename);
+  const baseName = `${Date.now()}-${randomUUID()}${ext}`;
+  const bucketDir = resolveBucketDir(rule.bucket);
+  await mkdir(bucketDir, { recursive: true });
+  const diskPath = path.join(bucketDir, baseName);
+  await writeFile(diskPath, buffer);
+
+  const mimeType = meta.mimeType.toLowerCase().trim();
+
+  return {
+    bucket: rule.bucket,
+    diskPath,
+    mimeType,
+    publicPath: toPublicStoragePath(rule.bucket, baseName),
+    sizeBytes: buffer.length
+  };
 }
 
 export async function saveUploadFile(file: File, kind: MediaKind): Promise<MediaUploadSuccess> {

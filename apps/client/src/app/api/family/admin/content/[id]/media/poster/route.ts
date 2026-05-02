@@ -1,15 +1,35 @@
 import { Prisma } from "../../../../../../../../generated/prisma-family/client";
 import { NextResponse } from "next/server";
 import {
+  FAMILY_IMAGE_UPLOAD_MAX_BYTES,
   removeStoredFileMaybe,
-  saveUploadFile,
-  validateUploadFile
+  saveImageUploadFromBuffer
 } from "../../../../../../../../lib/server/admin/admin-media-storage";
 import { buildAdminContentMediaSummaryDto } from "../../../../../../../../lib/server/admin/admin-content-media-summary";
+import { parseSingleFileMultipart } from "../../../../../../../../lib/server/admin/parse-single-file-multipart";
 import { requireAdminApi } from "../../../../../../../../lib/server/auth/require-admin-api";
 import { getFamilyPrisma } from "../../../../../../../../lib/server/db";
 
 export const runtime = "nodejs";
+
+function statusForUploadCode(code: string | undefined): number {
+  if (code === "max_size_exceeded") return 413;
+  if (
+    code === "invalid_mime" ||
+    code === "invalid_extension" ||
+    code === "empty_file" ||
+    code === "file_required" ||
+    code === "invalid_content_type" ||
+    code === "multipart_parse_error" ||
+    code === "body_read_error" ||
+    code === "parts_limit" ||
+    code === "files_limit" ||
+    code === "no_body"
+  ) {
+    return 400;
+  }
+  return 400;
+}
 
 export async function POST(
   request: Request,
@@ -22,29 +42,24 @@ export async function POST(
 
   const { id: contentItemId } = await ctx.params;
 
-  let form: FormData;
-  try {
-    form = await request.formData();
-  } catch {
-    return NextResponse.json({ error: "invalid_form_data" }, { status: 400 });
-  }
-
-  const candidate = form.get("file");
-  if (!(candidate instanceof File)) {
-    return NextResponse.json({ error: "file_required", message: "Debes adjuntar el campo file." }, { status: 400 });
-  }
-
-  const validation = validateUploadFile(candidate, "poster");
-  if (!validation.ok) {
+  const parsed = await parseSingleFileMultipart(request, {
+    fieldName: "file",
+    maxFileBytes: FAMILY_IMAGE_UPLOAD_MAX_BYTES
+  });
+  if (!parsed.ok) {
     return NextResponse.json(
-      { error: validation.code, message: validation.message },
-      { status: 400 }
+      { error: parsed.error, message: parsed.message },
+      { status: parsed.status }
     );
   }
 
-  let saved: Awaited<ReturnType<typeof saveUploadFile>> | null = null;
+  let saved: Awaited<ReturnType<typeof saveImageUploadFromBuffer>> | null = null;
   try {
-    saved = await saveUploadFile(candidate, "poster");
+    saved = await saveImageUploadFromBuffer(
+      parsed.buffer,
+      { filename: parsed.filename, mimeType: parsed.mimeType },
+      "poster"
+    );
     const prisma = getFamilyPrisma();
     const existing = await prisma.contentItem.findUnique({
       where: { id: contentItemId },
@@ -79,8 +94,26 @@ export async function POST(
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
+
     const message = error instanceof Error ? error.message : "upload_failed";
-    return NextResponse.json({ error: "upload_failed", message }, { status: 503 });
+    const stack = error instanceof Error ? error.stack : undefined;
+    const code =
+      error instanceof Error && "code" in error && typeof (error as NodeJS.ErrnoException).code === "string"
+        ? (error as NodeJS.ErrnoException).code!
+        : undefined;
+
+    console.error("[homeflix:image-upload]", "upload_failed", {
+      contentItemId,
+      type: "poster" as const,
+      message,
+      stack,
+      error
+    });
+
+    const status = statusForUploadCode(code);
+    return NextResponse.json(
+      { error: code ?? "upload_failed", message },
+      { status }
+    );
   }
 }
-
