@@ -20,3 +20,4 @@ apps/client/tsconfig.tsbuildinfo
 # Medios locales de desarrollo (no versionar subidas de prueba)
 apps/client/public/storage/**/*
 !apps/client/public/storage/**/.gitkeep
+.env.production
