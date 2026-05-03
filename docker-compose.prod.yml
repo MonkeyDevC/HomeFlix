@@ -3,10 +3,12 @@ name: homeflix-prod
 # --------------------------------------------------------------------------- #
 # HomeFlix Family V1 — compose de producción (VPS Ubuntu).
 #
-# Contiene SOLO los servicios realmente necesarios para Family V1:
+# Servicios Family V1 + motor de media (fase incremental):
 #   - postgres : base de datos (no se expone al host)
 #   - client   : monolito Next.js (apps/client) con Prisma + migrate deploy
 #   - nginx    : reverse proxy público (TLS se añade más adelante)
+#   - jellyfin : biblioteca / metadata / streaming / transcodificación (solo
+#     integración de infra en esta fase; la UI y auth siguen en HomeFlix).
 #
 # Explícitamente NO incluye Directus ni la API Fastify legada (V2).
 # Usar `docker compose -f docker-compose.prod.yml ...` (NO combinar con el
@@ -68,7 +70,7 @@ services:
     networks:
       - homeflix-internal
     # Sobreescribe el HEALTHCHECK de la imagen: puerto explícito (evita sustitución
-    # rara de ${PORT} en build) y más margen en cold start (migrate + next start).
+    # rara de ${PORT} en build) y más margen en cold start (migrate + servidor Node).
     healthcheck:
       test:
         [
@@ -113,6 +115,31 @@ services:
       retries: 3
       start_period: 10s
 
+  # Jellyfin: motor de media interno (misma red que client/postgres). Fase 1:
+  # solo servicio + volúmenes; HomeFlix no llama aún a la API de Jellyfin.
+  # Acceso inicial al wizard: http://IP_DEL_SERVIDOR:8096 (puerto publicado abajo).
+  jellyfin:
+    image: jellyfin/jellyfin:10.10.7
+    container_name: homeflix-prod-jellyfin
+    restart: unless-stopped
+    environment:
+      TZ: "${TZ:-UTC}"
+    volumes:
+      - homeflix-jellyfin-config:/config
+      - homeflix-jellyfin-cache:/cache
+      # Mismo volumen que el client; solo lectura: metadata y transcodes van en
+      # /config y /cache. Ajustar permisos en host/volumen si Jellyfin no ve archivos.
+      - homeflix-media:/media:ro
+    ports:
+      # Exposición temporal solo para configuración inicial (wizard). Cerrar o
+      # sustituir por reverse proxy + TLS cuando la integración esté lista.
+      - "${JELLYFIN_HTTP_PORT:-8096}:8096"
+    expose:
+      - "8096"
+    networks:
+      - homeflix-internal
+    # HEALTHCHECK heredado de la imagen (curl → /health).
+
 networks:
   homeflix-internal:
     driver: bridge
@@ -126,3 +153,7 @@ volumes:
     name: homeflix-nginx-certs
   homeflix-nginx-webroot:
     name: homeflix-nginx-webroot
+  homeflix-jellyfin-config:
+    name: homeflix-jellyfin-config
+  homeflix-jellyfin-cache:
+    name: homeflix-jellyfin-cache

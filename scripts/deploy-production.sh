@@ -25,5 +25,6 @@ echo "==> Estado de servicios"
 
 echo "==> Listo. Siguientes pasos sugeridos:"
 echo "    - Logs: ${COMPOSE[*]} logs -f client"
+echo "    - Jellyfin: ${COMPOSE[*]} logs -f jellyfin  |  panel: http://IP:\${JELLYFIN_HTTP_PORT:-8096}"
 echo "    - Health app: curl -sS http://127.0.0.1:\${NGINX_HTTP_PORT:-80}/api/family/healthz"
-echo "    - Primer admin: ver docs/deploy-production.md (bootstrap manual)"
+echo "    - Primer admin HomeFlix: ver docs/deploy-production.md (bootstrap manual)"
